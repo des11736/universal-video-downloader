@@ -17,3 +17,11 @@ def test_launcher_installs_project_when_uvd_command_is_missing() -> None:
     assert content.count('if not exist "%UVD_LAUNCHER%"') >= 2
     assert "UVD command is missing" in content
     assert "python -m pip install -e ." in content
+
+
+def test_launcher_describes_wechat_page_listener() -> None:
+    """启动横幅应说明视频号页面监听器和代理地址。"""
+    content = _LAUNCHER.read_text(encoding="utf-8")
+
+    assert "WeChat page listener" in content
+    assert "127.0.0.1:8888" in content

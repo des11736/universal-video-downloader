@@ -25,8 +25,7 @@ pip install -e .
 # 下载单个视频
 uvd download https://www.youtube.com/watch?v=xxx
 
-# 下载微信视频号(首次运行自动生成 CA 证书)
-uvd download https://channels.weixin.qq.com/...
+# 下载微信视频号：请使用根目录 README 的页面下载按钮流程
 
 # 查看视频信息(不下载)
 uvd info <url>
@@ -174,28 +173,17 @@ ytdlp:
 | Facebook | YtDlpAdapter | `https://www.facebook.com/xxx/videos/xxx` | yt-dlp 通用 |
 | 央视频(cctv.com) | YtDlpAdapter | `https://tv.cctv.com/...` | 新闻、综艺、纪录片(通过 yt-dlp) |
 | 央视频 App | YtDlpAdapter | `https://yangshipin.cctv.cn/...` | App 网页版内容(通过 yt-dlp) |
-| 微信视频号 | WechatChannelsAdapter | `https://channels.weixin.qq.com/...` | MITM + ISAAC 解密 |
+| 微信视频号 | WechatChannelsAdapter | `https://channels.weixin.qq.com/...` | 页面监听 + 注入下载按钮 |
 
 ## 视频号首次使用步骤
 
-首次运行 `uvd download --platform wechat <url>` 会自动生成 CA 证书到 `~/.uvd/certs/`。
+1. 启动根目录的 `scripts\start_uvd.bat` 并保持窗口运行。
+2. 首次使用时，将 `universal_video_downloader\certs\ca.crt` 安装到 Windows“当前用户 → 受信任的根证书颁发机构”。
+3. 在 Windows 系统代理中设置 `127.0.0.1:8888`。
+4. 用已登录浏览器打开视频详情页；页面自动注入「下载」按钮，点击后由浏览器直接下载。
+5. 结束后关闭 UVD，并关闭 Windows 系统代理。
 
-### 1. 安装根证书(Windows)
-
-1. 双击 `~/.uvd/certs/ca.crt`
-2. 选择「安装证书」
-3. 选择「本地计算机」
-4. 选择「将所有的证书放入下列存储」
-5. 点击「浏览」,选择「受信任的根证书颁发机构」
-6. 完成安装向导
-
-### 2. 设置系统代理
-
-Windows 设置 → 网络和 Internet → 代理 → 手动设置代理 → `127.0.0.1:2023`
-
-### 3. 浏览器访问
-
-浏览器访问视频号页面,程序自动捕获并下载。
+完整的图文操作说明请查看项目根目录的 [README](../README.md#微信视频号)。
 
 ## 开发
 

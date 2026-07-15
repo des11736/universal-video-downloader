@@ -106,6 +106,8 @@ echo.
 echo ========================================
 echo   UVD WebUI is running!
 echo   URL: http://127.0.0.1:8000
+echo   WeChat page listener: 127.0.0.1:8888
+echo   Configure the Windows proxy, then open a video page and click its Download button.
 echo   Press Ctrl+C to stop
 echo ========================================
 echo.
