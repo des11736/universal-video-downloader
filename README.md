@@ -18,6 +18,8 @@
 
 ### 1. 安装
 
+#### Windows
+
 ```bash
 # 克隆仓库
 git clone https://github.com/des11736/universal-video-downloader.git
@@ -27,17 +29,60 @@ cd universal-video-downloader
 pip install -e .
 ```
 
-### 2. 使用 Web UI(推荐)
-
-**Windows 用户**:双击 `scripts/start_uvd.bat` 即可,首次运行会自动创建桌面快捷方式。
-
-**命令行启动**:
+#### macOS
 
 ```bash
+# 克隆仓库
+git clone https://github.com/des11736/universal-video-downloader.git
+cd universal-video-downloader
+
+# macOS 自带 Python 3,建议先升级 pip
+python3 -m pip install --upgrade pip
+
+# 安装依赖
+python3 -m pip install -e .
+
+# 如果缺少 ffi 库(编译某些依赖时需要),先装:
+# brew install libffi
+```
+
+#### Linux
+
+```bash
+git clone https://github.com/des11736/universal-video-downloader.git
+cd universal-video-downloader
+
+# 确保有 Python 3.10+
+python3 --version
+
+# 安装依赖(建议用虚拟环境)
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+
+# 如缺少编译工具链,先装:
+# Ubuntu/Debian: sudo apt install gcc python3-dev
+# CentOS/RHEL: sudo yum install gcc python3-devel
+```
+
+### 2. 使用 Web UI(推荐)
+
+#### Windows
+
+双击 `scripts/start_uvd.bat` 即可,首次运行会自动创建桌面快捷方式。
+
+#### macOS / Linux
+
+```bash
+# 启动 Web 服务
 uvd serve
+
+# 或指定 host 和端口
+uvd serve --host 0.0.0.0 --port 8000
 ```
 
 启动后浏览器访问 http://127.0.0.1:8000
+
+> **macOS 提示**:如果遇到「无法验证开发者」安全提示,在「系统设置 → 隐私与安全性」中点击「仍要打开」即可。
 
 #### Web UI 使用流程
 
@@ -104,13 +149,38 @@ uvd config set download.defaultHighest true
 
 ### 微信视频号
 
-微信视频号适配器采用 MITM 代理方案:
-- 动态生成 SSL 证书并自动安装到系统信任
-- 拦截视频号网页请求,提取加密视频流
-- 使用 ISAAC 解密算法还原原始视频
-- 多线程分块下载
+微信视频号没有公开的视频 URL,无法像其他平台一样直接粘贴链接下载。适配器采用 MITM 代理方案,工作原理如下:
 
-首次使用需安装证书,按终端提示操作即可。
+1. **启动 MITM 代理**:程序在本地启动一个 HTTPS 中间人代理服务器
+2. **生成并安装证书**:动态生成 SSL 根证书,首次运行时会提示你安装到系统信任证书库
+3. **设置系统代理**:自动将系统代理指向本地 MITM 代理
+4. **打开浏览器**:程序会自动打开浏览器并导航到微信视频号页面
+5. **播放视频**:在浏览器中正常浏览并播放你想下载的视频号内容
+6. **拦截 + 解密**:代理拦截视频号的加密视频流,使用 ISAAC 解密算法还原原始视频分片
+7. **合并下载**:多线程下载所有分片并合并为完整视频
+
+#### 使用步骤
+
+```bash
+# CLI 方式
+uvd download --platform wechat "https://channels.weixin.qq.com/..."
+
+# 或指定视频号链接
+uvd download --platform wechat "https://channels.weixin.qq.com/web/pages/feed/xxxxx"
+```
+
+首次运行时终端会提示安装证书:
+
+- **Windows**:双击生成的 `.cer` 文件 → 安装证书 → 本地计算机 → 受信任的根证书颁发机构
+- **macOS**:双击 `.pem` 文件 → 打开「钥匙串访问」→ 找到证书 → 右键「显示简介」→ 信任 → 设为「始终信任」
+
+证书安装完成后,重新运行命令即可。后续使用无需重复安装。
+
+> **注意**:
+> - 使用前请确保微信视频号页面在浏览器中能正常访问
+> - 下载完成后,程序会自动恢复系统代理设置
+> - 如需手动取消,按 `Ctrl+C` 即可终止代理和下载
+> - ISAAC 解密基于公开算法规范实现,与微信客户端原版的兼容性需用真实视频样本验证
 
 ## 配置
 
