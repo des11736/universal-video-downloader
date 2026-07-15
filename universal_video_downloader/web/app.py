@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import stat
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlparse
 from uuid import uuid4
 
 from fastapi import (
@@ -39,8 +41,10 @@ from ..core.models import DownloadOptions
 from ..scheduler.dispatcher import Dispatcher, create_dispatcher
 from ..scheduler.registry import create_default_registry
 from .callback_adapter import WebProgressCallback
+from .wechat_listener import WechatPageListener
 
 app = FastAPI(title="UVD Web UI")
+logger = logging.getLogger(__name__)
 
 # 全局状态(单进程内)
 _dispatcher: Optional[Dispatcher] = None  # 懒加载的调度器
@@ -48,6 +52,7 @@ _config: Optional[AppConfig] = None  # 与调度器配套的应用配置
 _task_statuses: dict[str, dict] = {}  # task_id -> 状态 dict
 _progress_subscribers: set[WebSocket] = set()  # WebSocket 订阅者集合
 _progress_events: asyncio.Queue = asyncio.Queue()  # 进度事件广播队列
+_wechat_page_listener = WechatPageListener()
 
 # 静态资源目录(本文件同级的 static/)
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -116,6 +121,31 @@ def _get_dispatcher() -> Dispatcher:
     return _dispatcher
 
 
+def _is_wechat_channels_url(url: str) -> bool:
+    """判断 URL 是否属于需要页面下载按钮的视频号站点。"""
+    return urlparse(url).hostname == "channels.weixin.qq.com"
+
+
+def _start_wechat_page_listener() -> None:
+    """启动页面注入代理；失败时不影响其他平台的 Web 下载。"""
+    try:
+        cert_path = _wechat_page_listener.start()
+        logger.warning(
+            "视频号页面监听已启动（127.0.0.1:8888）。根证书：%s",
+            cert_path,
+        )
+    except Exception as exc:
+        logger.warning(
+            "视频号页面监听启动失败，其他下载功能不受影响：%s",
+            exc,
+        )
+
+
+def _stop_wechat_page_listener() -> None:
+    """在 Web 服务退出时停止页面注入代理。"""
+    _wechat_page_listener.stop()
+
+
 async def _run_download(task_id: str, req: DownloadRequest) -> None:
     """后台下载任务:构造选项,异步派发,完成后更新任务状态。
 
@@ -177,6 +207,15 @@ async def api_download(req: DownloadRequest) -> DownloadResponse:
     生成 task_id,在 ``_task_statuses`` 中登记 PENDING 状态,然后用
     ``asyncio.create_task`` 在后台执行下载,立即返回 task_id 给前端。
     """
+    if _is_wechat_channels_url(req.url):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "视频号请设置 127.0.0.1:8888 系统代理后，"
+                "在视频页面点击页面下载按钮。"
+            ),
+        )
+
     task_id = uuid4().hex
     _task_statuses[task_id] = {
         "task_id": task_id,
@@ -384,6 +423,13 @@ async def ws_progress(ws: WebSocket) -> None:
 async def _on_startup() -> None:
     """启动时触发调度器初始化,避免首个请求承担加载延迟。"""
     _get_dispatcher()
+    _start_wechat_page_listener()
+
+
+@app.on_event("shutdown")
+async def _on_shutdown() -> None:
+    """停止 Web 服务关联的页面监听器。"""
+    _stop_wechat_page_listener()
 
 
 # ---------------------------------------------------------------------------

@@ -47,6 +47,12 @@ def _setup_mock(monkeypatch) -> None:
     monkeypatch.setattr(
         app_module, "_get_dispatcher", lambda: MockDispatcher()
     )
+    monkeypatch.setattr(
+        app_module, "_start_wechat_page_listener", lambda: None
+    )
+    monkeypatch.setattr(
+        app_module, "_stop_wechat_page_listener", lambda: None
+    )
     # _run_download 中会断言 _config is not None,需同步设置
     monkeypatch.setattr(app_module, "_config", AppConfig())
 
@@ -63,6 +69,45 @@ def test_post_download(monkeypatch) -> None:
         data = resp.json()
         assert "task_id" in data
         assert data["status"] == "PENDING"
+
+
+def test_startup_and_shutdown_manage_wechat_listener(monkeypatch) -> None:
+    """Web 服务启动和退出时应分别管理页面监听器。"""
+    calls = []
+    monkeypatch.setattr(app_module, "_get_dispatcher", lambda: MockDispatcher())
+    monkeypatch.setattr(
+        app_module,
+        "_start_wechat_page_listener",
+        lambda: calls.append("start"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        app_module,
+        "_stop_wechat_page_listener",
+        lambda: calls.append("stop"),
+        raising=False,
+    )
+
+    with TestClient(app):
+        assert calls == ["start"]
+
+    assert calls == ["start", "stop"]
+
+
+def test_post_download_rejects_wechat_channels_url(monkeypatch) -> None:
+    """视频号 URL 必须改走页面的注入下载按钮。"""
+    _setup_mock(monkeypatch)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/download",
+            json={
+                "url": "https://channels.weixin.qq.com/web/pages/feed/example"
+            },
+        )
+
+    assert response.status_code == 409
+    assert "页面下载按钮" in response.json()["detail"]
 
 
 def test_get_tasks(monkeypatch) -> None:
