@@ -54,6 +54,11 @@ class WechatPageListener:
             )
         if not self._proxy.is_running():
             self._proxy.start()
+        if not self._proxy.is_running():
+            self._proxy.stop()
+            raise RuntimeError(
+                "视频号页面监听器未能在 127.0.0.1:8888 启动"
+            )
         return cert_path
 
     def stop(self) -> None:

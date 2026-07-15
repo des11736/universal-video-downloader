@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from universal_video_downloader.web.wechat_listener import WechatPageListener
 
 
@@ -44,3 +48,40 @@ def test_listener_starts_one_proxy_and_stops_it(tmp_path) -> None:
     assert len(proxies) == 1
     assert proxies[0].kwargs["port"] == 8888
     assert proxies[0].stopped is True
+
+
+def test_page_listener_certificate_directory_is_ignored() -> None:
+    """本地 CA 私钥不能作为未跟踪文件留在项目中。"""
+    project_root = Path(__file__).resolve().parents[2]
+    ignore_rules = (project_root / ".gitignore").read_text(encoding="utf-8")
+
+    assert "universal_video_downloader/certs/" in ignore_rules
+
+
+def test_listener_reports_proxy_start_failure(tmp_path) -> None:
+    """代理启动后立即退出时，应报告监听器启动失败。"""
+    class FailingProxy:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+        def is_running(self) -> bool:
+            return False
+
+    listener = WechatPageListener(
+        cert_dir=tmp_path / "certs",
+        js_assets_dir=tmp_path / "assets",
+        proxy_factory=FailingProxy,
+        ensure_certificate=lambda cert_dir: (
+            cert_dir / "ca.crt",
+            cert_dir / "ca.key",
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="127.0.0.1:8888"):
+        listener.start()

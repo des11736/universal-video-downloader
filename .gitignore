@@ -1,6 +1,9 @@
 # Downloads
 downloads/
 
+# Locally generated video-channel MITM certificate and private key
+universal_video_downloader/certs/
+
 # Python
 __pycache__/
 *.py[cod]
