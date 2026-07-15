@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "universal-video-downloader"
+version = "0.1.0"
+description = "Universal video downloader with mitmproxy-based capture"
+requires-python = ">=3.10"
+dependencies = [
+    "yt-dlp",
+    "mitmproxy>=10.0",
+    "typer>=0.9",
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.20",
+    "pydantic>=2.0",
+    "pyyaml",
+    "rich",
+    "websockets",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "httpx",
+]
+
+[project.scripts]
+uvd = "universal_video_downloader.cli.main:app"
+
+[tool.setuptools.packages.find]
+include = ["universal_video_downloader*"]
