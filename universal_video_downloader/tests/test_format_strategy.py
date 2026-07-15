@@ -7,10 +7,99 @@ cookies 注入(cookiefile / cookiesfrombrowser / 法律声明)行为。通过 mo
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 from universal_video_downloader.core.models import DownloadOptions
 from universal_video_downloader.platforms.ytdlp_adapter import YtDlpAdapter
+
+
+@patch("universal_video_downloader.platforms.ytdlp_adapter.yt_dlp.YoutubeDL")
+def test_extract_info_returns_progressive_preview_url(mock_ytdlp_class):
+    """封面媒体只选择可由浏览器直接播放的渐进式格式。"""
+    mock_ytdlp_class.return_value.extract_info.return_value = {
+        "title": "示例视频",
+        "formats": [
+            {
+                "format_id": "137",
+                "url": "https://cdn.example/video-only.mp4",
+                "ext": "mp4",
+                "vcodec": "avc1",
+                "acodec": "none",
+                "height": 1080,
+            },
+            {
+                "format_id": "18",
+                "url": "https://cdn.example/progressive.mp4",
+                "ext": "mp4",
+                "vcodec": "avc1",
+                "acodec": "mp4a",
+                "height": 720,
+                "protocol": "https",
+            },
+            {
+                "format_id": "hls-1080",
+                "url": "https://cdn.example/segmented.m3u8",
+                "ext": "mp4",
+                "vcodec": "avc1",
+                "acodec": "mp4a",
+                "height": 1080,
+                "protocol": "m3u8_native",
+            },
+            {
+                "format_id": "hevc-1080",
+                "url": "https://cdn.example/hevc.mp4",
+                "ext": "mp4",
+                "vcodec": "hvc1",
+                "acodec": "mp4a",
+                "height": 1080,
+                "protocol": "https",
+            },
+            {
+                "format_id": "vp09-1080",
+                "url": "https://cdn.example/progressive.webm",
+                "ext": "webm",
+                "vcodec": "vp09.00.51.08",
+                "acodec": "opus",
+                "height": 1080,
+                "protocol": "https",
+            },
+        ],
+    }
+
+    info = YtDlpAdapter().extract_info("https://example.com/watch?v=1")
+
+    assert info.preview_url == "https://cdn.example/progressive.webm"
+
+
+@patch("universal_video_downloader.platforms.ytdlp_adapter.yt_dlp.YoutubeDL")
+def test_download_returns_final_postprocessed_file(mock_ytdlp_class, tmp_path: Path):
+    """下载任务应记录合并后的最终文件，而不是被删除的媒体分片。"""
+    final_path = tmp_path / "video.mp4"
+    final_path.write_bytes(b"final-video")
+
+    def fake_download(_urls):
+        opts = mock_ytdlp_class.call_args.args[0]
+        opts["progress_hooks"][0](
+            {
+                "status": "finished",
+                "filename": str(tmp_path / "video.f137.mp4"),
+                "info_dict": {},
+            }
+        )
+        opts["postprocessor_hooks"][0](
+            {"status": "finished", "info_dict": {"filepath": str(final_path)}}
+        )
+
+    mock_ytdlp_class.return_value.download.side_effect = fake_download
+
+    result = YtDlpAdapter().download(
+        "https://example.com/watch?v=1",
+        DownloadOptions(output_dir=str(tmp_path)),
+    )
+
+    assert result.success is True
+    assert result.file_path == str(final_path)
 
 
 @patch("universal_video_downloader.platforms.ytdlp_adapter.yt_dlp.YoutubeDL")

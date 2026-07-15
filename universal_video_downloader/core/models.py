@@ -41,6 +41,7 @@ class VideoInfo(BaseModel):
     platform: str = ""  # 适配器名,如 "ytdlp" / "wechat_channels"
     formats: list[VideoFormat] = Field(default_factory=list)
     thumbnail: str = ""
+    preview_url: str = ""
     description: str = ""
 
 

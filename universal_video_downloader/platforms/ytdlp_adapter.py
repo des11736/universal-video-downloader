@@ -25,6 +25,41 @@ from ..core.models import (
 )
 
 
+_BROWSER_PREVIEW_EXTENSIONS = {"mp4", "webm"}
+
+
+def _is_browser_playable_format(item: dict) -> bool:
+    """仅保留主流浏览器可直接播放的音视频编解码组合。"""
+    ext = str(item.get("ext") or "").lower()
+    if ext not in _BROWSER_PREVIEW_EXTENSIONS:
+        return False
+
+    vcodec = str(item.get("vcodec") or "").lower()
+    acodec = str(item.get("acodec") or "").lower()
+    if ext == "mp4":
+        return vcodec.startswith(("avc", "h264")) and acodec.startswith(
+            ("mp4a", "aac")
+        )
+    return vcodec.startswith(("vp8", "vp08", "vp9", "vp09")) and acodec.startswith(
+        ("opus", "vorbis")
+    )
+
+
+def _select_preview_url(formats: list[dict]) -> str:
+    """选择带音视频且可被浏览器直接加载的渐进式媒体地址。"""
+    progressive = [
+        item
+        for item in formats
+        if isinstance(item.get("url"), str)
+        and item["url"].startswith(("http://", "https://"))
+        and item.get("protocol") in {"http", "https"}
+        and _is_browser_playable_format(item)
+    ]
+    if not progressive:
+        return ""
+    return str(max(progressive, key=lambda item: item.get("height") or 0)["url"])
+
+
 class YtDlpAdapter(PlatformDownloader):
     """基于 yt-dlp 的通用兜底适配器。
 
@@ -87,8 +122,9 @@ class YtDlpAdapter(PlatformDownloader):
             info = next((e for e in entries if e), info)
 
         # 映射 formats 列表
+        raw_formats = info.get("formats", []) or []
         formats: list[VideoFormat] = []
-        for f in info.get("formats", []) or []:
+        for f in raw_formats:
             # resolution 优先取 yt-dlp 的 resolution 字段,否则拼 width x height
             resolution = f.get("resolution") or ""
             if not resolution:
@@ -119,6 +155,7 @@ class YtDlpAdapter(PlatformDownloader):
             platform="ytdlp",
             formats=formats,
             thumbnail=info.get("thumbnail") or "",
+            preview_url=_select_preview_url(raw_formats),
             description=info.get("description") or "",
         )
 
@@ -187,6 +224,14 @@ class YtDlpAdapter(PlatformDownloader):
                 # 记录错误信息(实际 on_error 回调在 except 块中统一调用)
                 error_box["msg"] = str(d.get("error", "") or "download error")
 
+        def _postprocessor_hook(d: dict) -> None:
+            """在后处理完成后记录实际保留的最终文件路径。"""
+            if d.get("status") != "finished":
+                return
+            final_path = (d.get("info_dict") or {}).get("filepath") or ""
+            if final_path and os.path.isfile(final_path):
+                file_path_box["path"] = final_path
+
         # 构建 yt-dlp 选项
         opts: dict = {
             "outtmpl": os.path.join(options.output_dir, options.filename_template),
@@ -195,6 +240,7 @@ class YtDlpAdapter(PlatformDownloader):
             "noprogress": True,
             "overwrites": options.overwrite,
             "progress_hooks": [_progress_hook],
+            "postprocessor_hooks": [_postprocessor_hook],
         }
 
         # 画质选择:传 quality 时直接用 format_id;未传时自动选择最佳画质并合并为 mp4
