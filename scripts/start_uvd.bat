@@ -1,7 +1,7 @@
 @echo off
 REM ============================================================
 REM   UVD WebUI Launcher
-REM   First-run: auto-installs all Python dependencies
+REM   First-run: auto-installs Python dependencies and the UVD CLI
 REM   Then starts the web server and opens the browser
 REM ============================================================
 
@@ -32,15 +32,22 @@ for /f "tokens=2 delims= " %%v in ('python --version 2^>^&1') do set PYVER=%%v
 echo   Python %PYVER% found.
 echo.
 
-REM ---- Step 2: Check if dependencies are installed ----
-echo [2/4] Checking dependencies...
-python -c "import uvicorn, fastapi, yt_dlp, websockets, multipart" >nul 2>&1
+REM ---- Step 2: Check dependencies and the current Python's UVD launcher ----
+echo [2/4] Checking dependencies and UVD command...
+python -c "import uvicorn, fastapi, mitmproxy, yt_dlp, websockets, multipart" >nul 2>&1
 if errorlevel 1 (
     goto :install_deps
-) else (
-    echo   All dependencies are installed.
-    goto :shortcut
 )
+
+for /f "delims=" %%s in ('python -c "import sysconfig; print(sysconfig.get_path('scripts'))"') do set "PYTHON_SCRIPTS=%%s"
+set "UVD_LAUNCHER=%PYTHON_SCRIPTS%\uvd.exe"
+if not exist "%UVD_LAUNCHER%" (
+    echo   UVD command is missing. Installing the project now...
+    goto :install_deps
+)
+
+echo   All dependencies and the UVD command are installed.
+goto :shortcut
 
 :install_deps
 echo.
@@ -61,6 +68,15 @@ if errorlevel 1 (
     echo   [ERROR] Failed to install dependencies.
     echo   Please check your internet connection and try again.
     echo   You can manually run: pip install -e .
+    echo.
+    pause
+    exit /b 1
+)
+if not exist "%UVD_LAUNCHER%" (
+    echo.
+    echo   [ERROR] Installation finished but the UVD command was not created.
+    echo   Expected command: %UVD_LAUNCHER%
+    echo   Please close this window, reopen PowerShell, and run: python -m pip install -e .
     echo.
     pause
     exit /b 1

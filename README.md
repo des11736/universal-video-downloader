@@ -25,9 +25,17 @@
 git clone https://github.com/des11736/universal-video-downloader.git
 cd universal-video-downloader
 
-# 安装依赖
-pip install -e .
+# 首次启动：自动检查 Python、安装缺失依赖并启动 Web UI
+.\scripts\start_uvd.bat
 ```
+
+也可以直接双击 `scripts/start_uvd.bat`。脚本会自动完成以下操作：
+
+1. 检查 Python 是否已安装；需要 **Python 3.10+**，且安装 Python 时必须勾选“Add Python to PATH”。
+2. 检测 `fastapi`、`uvicorn`、`yt-dlp` 等依赖；仅在缺失时自动运行 `python -m pip install --upgrade pip` 和 `python -m pip install -e .`。
+3. 创建桌面快捷方式并启动 Web UI，随后自动打开 `http://127.0.0.1:8000`。
+
+> 因此 Windows 用户通常**不需要先手动执行**安装命令。只有启动脚本明确提示安装失败时，才在 PowerShell/CMD 中进入项目目录后依次执行：`python -m pip install --upgrade pip` 和 `python -m pip install -e .`。
 
 #### macOS
 
@@ -168,60 +176,90 @@ uvd config set download.defaultHighest true
 5. 代理注入 JS 脚本,捕获视频 URL 和解密密钥
 6. 多线程下载加密视频分片,使用 ISAAC 算法解密,合并为 mp4
 
-#### 方式一:Web UI 上下载(推荐)
+#### 操作位置与准备工作
 
-**第 1 步:首次运行前,先用 CLI 生成并安装证书**
+视频号下载需要同时操作三个位置，请不要把命令粘贴到浏览器地址栏：
 
-```bash
-uvd download --platform wechat "https://channels.weixin.qq.com"
+| 操作位置 | 用途 | 要做什么 |
+| --- | --- | --- |
+| **终端 A（Windows PowerShell / CMD）** | 运行 `uvd`、启动代理并显示下载进度 | 全程保持打开，不能在下载期间关闭 |
+| **Windows 系统设置** | 将系统代理临时指向本地代理 | 代理地址为 `127.0.0.1:8888` |
+| **浏览器（Chrome / Edge / Firefox）** | 登录视频号、打开页面并播放视频 | 必须实际点击播放，程序才可捕获视频流 |
+
+以下示例以 Windows 为例。所有 `uvd` 命令都在**终端 A**中、项目根目录执行。已经成功启动过一次 `scripts/start_uvd.bat` 时，依赖和 `uvd` 命令已自动安装，无需再次执行安装命令：
+
+```powershell
+# 进入项目目录
+cd "D:\\codex_project\\视频号视频爬取"
+
+# 可选：确认命令已可用
+uvd --help
 ```
 
-终端会输出证书路径并等待你安装证书(按回车继续)。**完成证书安装后再继续**:
+> 如果尚未运行过启动脚本，或显示“`uvd` 不是内部或外部命令”，请先双击 `scripts/start_uvd.bat` 完成自动安装；也可手动依次执行 `python -m pip install --upgrade pip` 和 `python -m pip install -e .` 后重新打开终端。请使用完整的视频页面链接，例如 `https://channels.weixin.qq.com/web/pages/feed/xxxxx`，不要只使用首页链接。
 
-- **Windows**:双击 `certs/ca.crt` → 安装证书 → 本地计算机 → 受信任的根证书颁发机构
-- **macOS**:双击 `certs/ca.pem` → 钥匙串访问 → 右键证书 → 显示简介 → 信任 → 始终信任
+#### 第一次使用：安装本地根证书
 
-> 证书只需安装一次,后续无需重复。
+1. **在终端 A**执行下面命令。无需指定 `--platform`，程序会自动识别视频号；如需强制指定，正确的名称是 `wechat_channels`，不是 `wechat`。
 
-**第 2 步:设置系统代理**
+   ```powershell
+   uvd download "https://channels.weixin.qq.com/web/pages/feed/xxxxx"
+   # 等价的强制指定写法：
+   # uvd download "https://channels.weixin.qq.com/web/pages/feed/xxxxx" --platform wechat_channels
+   ```
 
-将系统代理设为 `127.0.0.1:8888`:
+   > `uvd download --platform wechat "..."` 会报“未找到平台适配器: wechat”，因为 `wechat` 不是有效名称。
 
-- **Windows**:设置 → 网络和 Internet → 代理 → 手动设置代理 → `127.0.0.1:8888`
-- **macOS**:系统设置 → 网络 → Wi-Fi → 详细信息 → 代理 → HTTP/HTTPS 代理 → `127.0.0.1:8888`
+2. **仍在终端 A**，程序会打印类似“已生成 CA 根证书”的完整文件路径，并显示“按回车继续”。先不要按回车。
 
-**第 3 步:在 Web UI 中提交下载**
+3. **在 Windows 文件资源管理器**中，打开终端打印的目录，双击 `ca.crt`，按以下选项安装：
 
-1. 打开 Web UI(http://127.0.0.1:8000)
-2. 在输入框粘贴视频号链接,例如:`https://channels.weixin.qq.com/web/pages/feed/xxxxx`
-3. 点击「下载」按钮(**注意:不要点「分析」**,视频号不支持预分析)
-4. 任务状态变为 RUNNING,显示「等待视频信息...」(进度条在 5%-20% 之间)
+   ```text
+   安装证书 → 本地计算机 → 将所有证书放入下列存储 → 浏览
+   → 受信任的根证书颁发机构 → 完成
+   ```
 
-**第 4 步:在浏览器中播放视频**
+4. 证书安装完成后，可在**终端 A**按 `Ctrl+C` 结束这次初始化命令；证书会保留，后续不需要重新安装。
 
-1. 打开浏览器(Chrome / Edge / Firefox)
-2. 访问你要下载的视频号页面
-3. **播放视频**,MITM 代理会自动拦截并捕获视频信息
-4. 捕获成功后,下载进度会从 20% 跳到实际下载进度
-5. 下载完成后,进度条显示 100%,文件保存在 `downloads/` 目录
+#### 每次下载前：设置代理
 
-**第 5 步:完成后取消系统代理**
+1. **在 Windows 系统设置**中打开：`设置 → 网络和 Internet → 代理 → 手动设置代理`。
+2. 打开“使用代理服务器”，填写：
 
-下载完成后,记得在系统设置中关闭代理,否则无法正常上网。
+   ```text
+   地址：127.0.0.1
+   端口：8888
+   ```
 
-#### 方式二:CLI 命令行下载
+3. 保持该设置开启，直到本次下载完成。若 8888 端口已被其他程序占用，请先关闭占用该端口的程序。
 
-```bash
-# 首次运行(生成证书 + 提示安装)
-uvd download --platform wechat "https://channels.weixin.qq.com/web/pages/feed/xxxxx"
-```
+#### 方式一：使用 Web UI 下载
 
-首次运行终端会提示:
-1. 安装根证书(按上文步骤)
-2. 设置系统代理为 `127.0.0.1:8888`
-3. 按回车继续
+1. **在终端 A**执行并保持运行：
 
-然后在浏览器中访问视频号页面并播放视频,程序会自动捕获并下载。
+   ```powershell
+   uvd serve
+   ```
+
+2. **在浏览器**打开 `http://127.0.0.1:8000`。在 Web UI 中粘贴完整的视频号页面链接，点击「下载」；**不要点击「分析」**，视频号不支持预分析。
+3. **回到终端 A**。首次在当前 Web 服务中提交视频号任务时，终端会再次显示证书/代理提示；证书已安装且代理已设置后，按回车继续，让代理开始监听。
+4. **在浏览器的另一个标签页**打开同一视频号页面，登录后**实际播放视频**。终端和 Web UI 会先显示“等待视频信息”，捕获成功后进度会开始增长。
+5. 下载完成后，Web UI 中可点击「预览」或「打开目录」；文件默认保存在 `downloads/`。
+
+#### 方式二：直接在 CLI 下载
+
+1. **在终端 A**执行，并保持该终端不要关闭：
+
+   ```powershell
+   uvd download "https://channels.weixin.qq.com/web/pages/feed/xxxxx"
+   ```
+
+2. 若终端提示“按回车继续”，确认根证书已安装、系统代理已设置为 `127.0.0.1:8888` 后，**在终端 A 按回车**。
+3. **在浏览器**打开同一个视频号页面并播放视频。终端捕获到视频信息后会开始下载，成功时输出 `下载成功: ...`。
+
+#### 下载完成后：关闭系统代理
+
+**在 Windows 系统设置**中回到 `设置 → 网络和 Internet → 代理`，关闭“使用代理服务器”。否则其他网站可能无法正常访问。
 
 #### 注意事项
 
