@@ -29,3 +29,6 @@ decompiled/
 
 # Spec documents (internal planning)
 .trae/specs/
+
+# Isolated Git worktrees
+.worktrees/
