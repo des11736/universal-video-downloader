@@ -22,7 +22,14 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
 
-from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    File,
+    HTTPException,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -44,6 +51,11 @@ _progress_events: asyncio.Queue = asyncio.Queue()  # 进度事件广播队列
 
 # 静态资源目录(本文件同级的 static/)
 _STATIC_DIR = Path(__file__).parent / "static"
+_PREVIEW_MEDIA_TYPES = {
+    ".m4v": "video/x-m4v",
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+}
 
 # Cookies 使用法律声明:提醒用户仅下载合法授权内容
 LEGAL_NOTICE = (
@@ -59,6 +71,7 @@ class DownloadRequest(BaseModel):
     """下载请求体。"""
 
     url: str
+    title: Optional[str] = None
     quality: Optional[str] = None
     output_dir: str = "./downloads"
     filename_template: Optional[str] = None
@@ -142,7 +155,12 @@ async def _run_download(task_id: str, req: DownloadRequest) -> None:
         _task_statuses[task_id].update(status="FAILED", error=str(e))
         return
     if result.success:
-        _task_statuses[task_id].update(status="DONE", file_path=result.file_path)
+        title = _task_statuses[task_id].get("title") or Path(
+            result.file_path
+        ).stem
+        _task_statuses[task_id].update(
+            status="DONE", file_path=result.file_path, title=title
+        )
     else:
         _task_statuses[task_id].update(
             status="FAILED", error=result.error or "下载失败"
@@ -166,6 +184,7 @@ async def api_download(req: DownloadRequest) -> DownloadResponse:
         "error": "",
         "file_path": "",
         "url": req.url,
+        "title": (req.title or "").strip(),
         "percent": 0.0,
     }
     asyncio.create_task(_run_download(task_id, req))
@@ -227,6 +246,7 @@ async def api_info(req: InfoRequest):
         "uploader": info.uploader,
         "platform": info.platform,
         "thumbnail": info.thumbnail,
+        "preview_url": info.preview_url,
         "formats": formats,
     }
 
@@ -240,11 +260,20 @@ async def api_preview(task_id: str):
     """
     status = _task_statuses.get(task_id)
     if not status or not status.get("file_path"):
-        return {"error": "文件不存在"}
-    file_path = status["file_path"]
-    if not os.path.exists(file_path):
-        return {"error": "文件不存在"}
-    return FileResponse(file_path, media_type="video/mp4")
+        raise HTTPException(status_code=404, detail="文件不存在")
+    file_path = Path(status["file_path"])
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    media_type = _PREVIEW_MEDIA_TYPES.get(file_path.suffix.lower())
+    if media_type is None:
+        raise HTTPException(
+            status_code=415, detail="该文件格式无法在浏览器中预览"
+        )
+    return FileResponse(
+        file_path,
+        media_type=media_type,
+        headers={"Content-Disposition": "inline"},
+    )
 
 
 @app.post("/api/open-folder/{task_id}")

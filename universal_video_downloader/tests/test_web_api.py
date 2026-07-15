@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from universal_video_downloader.core.config import AppConfig
-from universal_video_downloader.core.models import DownloadResult
+from universal_video_downloader.core.models import DownloadResult, VideoFormat, VideoInfo
 from universal_video_downloader.web import app as app_module
 from universal_video_downloader.web.app import app
 
@@ -202,3 +202,124 @@ def test_download_passes_cookies_file(monkeypatch) -> None:
             time.sleep(0.02)
         assert "options" in captured, "调度器未收到下载请求"
         assert captured["options"].cookies_file == "/tmp/fake_cookies.txt"
+
+
+def test_info_returns_preview_url(monkeypatch) -> None:
+    """信息接口应公开用于加载列表首帧的分析媒体地址。"""
+    _setup_mock(monkeypatch)
+
+    class InfoAdapter:
+        def extract_info(self, url, **_kwargs):
+            return VideoInfo(
+                url=url,
+                title="分析视频",
+                preview_url="https://cdn.example.com/video.mp4",
+                formats=[
+                    VideoFormat(
+                        format_id="18",
+                        ext="mp4",
+                        resolution="1280x720",
+                        vcodec="avc1",
+                        acodec="mp4a",
+                    )
+                ],
+            )
+
+    class InfoRegistry:
+        def select(self, _url):
+            return InfoAdapter()
+
+    monkeypatch.setattr(app_module, "create_default_registry", lambda: InfoRegistry())
+    with TestClient(app) as client:
+        response = client.post("/api/info", json={"url": "https://example.com/v"})
+
+    assert response.status_code == 200
+    assert response.json()["preview_url"] == "https://cdn.example.com/video.mp4"
+
+
+def test_download_task_keeps_supplied_title(monkeypatch) -> None:
+    """下载任务应保存前端提交的分析标题。"""
+    _setup_mock(monkeypatch)
+    app_module._task_statuses.clear()
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/download",
+            json={"url": "https://example.com/v", "title": "分析视频名称"},
+        ).json()
+        tasks = client.get("/api/tasks").json()
+
+    task = next(item for item in tasks if item["task_id"] == created["task_id"])
+    assert task["title"] == "分析视频名称"
+
+
+def test_download_task_uses_output_filename_when_title_is_missing(monkeypatch) -> None:
+    """没有分析标题时，完成任务应回退显示下载文件名。"""
+    _setup_mock(monkeypatch)
+    app_module._task_statuses.clear()
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/download", json={"url": "https://example.com/v"}
+        ).json()
+        task_id = created["task_id"]
+        for _ in range(50):
+            tasks = client.get("/api/tasks").json()
+            task = next(item for item in tasks if item["task_id"] == task_id)
+            if task["status"] == "DONE":
+                break
+            time.sleep(0.02)
+
+    assert task["title"] == "x"
+
+
+def test_preview_rejects_missing_and_unsupported_files(monkeypatch, tmp_path) -> None:
+    """预览接口需区分不存在的文件与浏览器不支持的格式。"""
+    _setup_mock(monkeypatch)
+    app_module._task_statuses.clear()
+    app_module._task_statuses["missing"] = {
+        "file_path": str(tmp_path / "missing.mp4")
+    }
+    unsupported_file = tmp_path / "video.mkv"
+    unsupported_file.write_bytes(b"not-a-browser-media-file")
+    app_module._task_statuses["unsupported"] = {"file_path": str(unsupported_file)}
+
+    with TestClient(app) as client:
+        missing = client.get("/api/preview/missing")
+        unsupported = client.get("/api/preview/unsupported")
+
+    assert missing.status_code == 404
+    assert unsupported.status_code == 415
+
+
+def test_preview_serves_video_range_requests(monkeypatch, tmp_path) -> None:
+    """浏览器的媒体范围请求应得到可播放的部分视频响应。"""
+    _setup_mock(monkeypatch)
+    app_module._task_statuses.clear()
+    video_file = tmp_path / "video.mp4"
+    video_file.write_bytes(b"abcdef")
+    app_module._task_statuses["video"] = {"file_path": str(video_file)}
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/preview/video", headers={"Range": "bytes=0-3"}
+        )
+
+    assert response.status_code == 206
+    assert response.headers["content-type"] == "video/mp4"
+    assert response.headers["accept-ranges"] == "bytes"
+    assert response.headers["content-disposition"] == "inline"
+    assert response.content == b"abcd"
+
+
+def test_web_page_contains_cover_title_and_preview_error_hooks() -> None:
+    """静态页面应包含首帧封面、任务标题和预览错误处理钩子。"""
+    html = (Path(app_module._STATIC_DIR) / "index.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'class="video-cover"' in html
+    assert "data-thumbnail" in html
+    assert "renderCover(data)" in html
+    assert 'class="task-title"' in html
+    assert "taskDisplayTitle(t)" in html
+    assert 'id="preview-error"' in html
+    assert "previewVideo.load()" in html

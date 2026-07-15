@@ -138,10 +138,11 @@
     @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 
     .video-card-top { display: flex; gap: 14px; margin-bottom: 12px; }
-    .video-card img {
+    .video-cover {
       width: 120px; height: 68px; object-fit: cover; border-radius: 6px; flex-shrink: 0;
       background: var(--border);
     }
+    .video-cover-placeholder { display: flex; align-items: center; justify-content: center; }
     .video-card-meta { flex: 1; min-width: 0; }
     .video-card-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; word-break: break-all; }
     .video-card-sub { font-size: 13px; color: var(--text-secondary); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -227,7 +228,9 @@
     .task-card:hover { box-shadow: var(--shadow-md); border-color: #d0d5dd; }
 
     .task-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 12px; }
-    .task-url { font-size: 14px; font-weight: 600; color: var(--text); word-break: break-all; flex: 1; line-height: 1.5; }
+    .task-info { flex: 1; min-width: 0; }
+    .task-title { font-size: 14px; font-weight: 700; color: var(--text); word-break: break-all; line-height: 1.5; }
+    .task-url { margin-top: 3px; font-size: 12px; color: var(--text-secondary); word-break: break-all; line-height: 1.45; }
     .task-id { font-size: 12px; color: var(--text-tertiary); font-family: 'SF Mono', Consolas, monospace; background: var(--bg); padding: 2px 8px; border-radius: 4px; flex-shrink: 0; }
 
     .task-bottom { display: flex; align-items: center; gap: 16px; }
@@ -274,6 +277,7 @@
     }
     .modal-close:hover { background: var(--failed-bg); color: var(--failed-text); }
     .modal-content video { max-width: 100%; max-height: 70vh; border-radius: var(--radius-sm); }
+    .preview-error { min-height: 20px; margin-top: 8px; color: var(--failed-text); font-size: 13px; }
 
     @media (max-width: 768px) {
       .container { padding: 32px 16px 60px; }
@@ -281,7 +285,7 @@
       .task-top { flex-direction: column-reverse; }
       .task-bottom { flex-wrap: wrap; }
       .video-card-top { flex-direction: column; }
-      .video-card img { width: 100%; height: 180px; }
+      .video-cover { width: 100%; height: 180px; }
     }
   </style>
 </head>
@@ -388,6 +392,7 @@
         <button class="modal-close" id="preview-close">&times;</button>
       </div>
       <video id="preview-video" controls></video>
+      <p id="preview-error" class="preview-error" role="alert" aria-live="polite"></p>
     </div>
   </div>
 
@@ -417,9 +422,11 @@
     const previewVideo = document.getElementById("preview-video");
     const previewTitle = document.getElementById("preview-title");
     const previewClose = document.getElementById("preview-close");
+    const previewError = document.getElementById("preview-error");
 
     let legalNoticeTextCache = "";
     let debounceTimer = null;
+    let previewLoading = false;
 
     function shortId(id) { return id ? id.slice(0, 8) : ""; }
     function escapeHtml(s) {
@@ -437,6 +444,36 @@
       if (b > 1048576) return (b/1048576).toFixed(1) + " MB";
       if (b > 1024) return (b/1024).toFixed(0) + " KB";
       return b + " B";
+    }
+
+    function coverFallbackHtml(thumbnail) {
+      if (thumbnail) {
+        return '<img class="video-cover" src="' + escapeHtml(thumbnail) + '" alt="视频封面" />';
+      }
+      return '<div class="video-cover video-cover-placeholder" aria-label="无可用封面">' +
+        '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#ccc" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+        '</div>';
+    }
+
+    function renderCover(data) {
+      if (!data.preview_url) return coverFallbackHtml(data.thumbnail);
+      return '<video class="video-cover" muted playsinline preload="auto" data-thumbnail="' +
+        escapeHtml(data.thumbnail || "") + '" src="' + escapeHtml(data.preview_url) + '"></video>';
+    }
+
+    function createCoverFallback(thumbnail) {
+      const template = document.createElement("template");
+      template.innerHTML = coverFallbackHtml(thumbnail);
+      return template.content.firstChild;
+    }
+
+    function bindVideoCovers() {
+      videoList.querySelectorAll("video.video-cover").forEach(video => {
+        video.addEventListener("loadeddata", () => video.pause(), { once: true });
+        video.addEventListener("error", () => {
+          video.replaceWith(createCoverFallback(video.dataset.thumbnail));
+        }, { once: true });
+      });
     }
     function resHeight(res) {
       if (!res) return 0;
@@ -603,9 +640,7 @@
         // done
         const data = v.data;
         const formats = (data.formats || []).slice().sort((a, b) => resHeight(b.resolution) - resHeight(a.resolution));
-        let thumbnailHtml = data.thumbnail
-          ? '<img src="' + escapeHtml(data.thumbnail) + '" onerror="this.style.display=\'none\'" />'
-          : '<div style="width:120px;height:68px;border-radius:6px;background:var(--border);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#ccc" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>';
+        const coverHtml = renderCover(data);
 
         let optionsHtml = '<option value="best">最佳画质 (自动选择最高)</option>';
         for (const f of formats) {
@@ -620,7 +655,7 @@
 
         return '<div class="video-card">' +
           '<div class="video-card-top">' +
-            thumbnailHtml +
+            coverHtml +
             '<div class="video-card-meta">' +
               '<div class="video-card-title">' + escapeHtml(data.title || "(无标题)") + "</div>" +
               '<div class="video-card-sub">' +
@@ -639,6 +674,8 @@
           "</div>" +
         "</div>";
       }).join("");
+
+      bindVideoCovers();
 
       // Restore selected formats
       for (const url of Object.keys(analyzedVideos)) {
@@ -664,13 +701,14 @@
     window.downloadOne = async function(url) {
       const v = analyzedVideos[url];
       if (!v || v.status !== "done") return;
-      await submitDownload(url, v.selectedFormat || "best");
+      await submitDownload(url, v.selectedFormat || "best", v.data.title || "");
     };
 
-    async function submitDownload(url, formatId) {
+    async function submitDownload(url, formatId, title) {
       try {
         const body = {
           url,
+          title: title || "",
           quality: formatId === "best" ? null : formatId,
           output_dir: "./downloads",
         };
@@ -682,7 +720,7 @@
         });
         if (!resp.ok) { alert("提交失败:HTTP " + resp.status); return; }
         const data = await resp.json();
-        tasks[data.task_id] = { task_id: data.task_id, url, status: "PENDING", percent: 0, file_path: "", error: "" };
+        tasks[data.task_id] = { task_id: data.task_id, url, title: title || "", status: "PENDING", percent: 0, file_path: "", error: "" };
         renderTasks();
       } catch (e) {
         alert("提交出错:" + e.message);
@@ -694,7 +732,7 @@
       downloadAllBtn.disabled = true;
       for (const url of urls) {
         const v = analyzedVideos[url];
-        await submitDownload(url, v.selectedFormat || "best");
+        await submitDownload(url, v.selectedFormat || "best", v.data.title || "");
       }
       downloadAllBtn.disabled = false;
     });
@@ -782,6 +820,15 @@
     cookiesSource.addEventListener("change", onCookiesSourceChange);
     cookiesUploadBtn.addEventListener("click", uploadCookies);
 
+    function taskDisplayTitle(t) {
+      if (t.title) return t.title;
+      if (t.file_path) {
+        const filename = t.file_path.split(/[\\/]/).pop();
+        if (filename) return filename.replace(/\.[^.]+$/, "");
+      }
+      return t.url || "(等待 URL)";
+    }
+
     function renderTasks() {
       const ids = Object.keys(tasks);
       if (ids.length === 0) {
@@ -795,6 +842,10 @@
       ids.sort().reverse();
       taskList.innerHTML = ids.map(id => {
         const t = tasks[id];
+        const title = taskDisplayTitle(t);
+        const sourceUrlHtml = t.url && title !== t.url
+          ? '<div class="task-url">' + escapeHtml(t.url) + "</div>"
+          : "";
         const pct = Math.max(0, Math.min(100, t.percent || 0));
         const pctText = t.percent != null ? pct.toFixed(0) + "%" : "—";
         let actionsHtml = "";
@@ -823,7 +874,10 @@
         }
         return '<div class="task-card">' +
           '<div class="task-top">' +
-            '<div class="task-url">' + escapeHtml(t.url || "(等待 URL)") + "</div>" +
+            '<div class="task-info">' +
+              '<div class="task-title">' + escapeHtml(title) + "</div>" +
+              sourceUrlHtml +
+            "</div>" +
             '<div class="task-id">' + escapeHtml(shortId(t.task_id)) + "</div>" +
           "</div>" +
           '<div class="task-bottom">' +
@@ -839,23 +893,36 @@
     }
 
     // Preview video
+    function resetPreview() {
+      previewLoading = false;
+      previewError.textContent = "";
+      previewVideo.pause();
+      previewVideo.removeAttribute("src");
+      previewVideo.load();
+    }
+    previewVideo.addEventListener("error", () => {
+      if (!previewLoading) return;
+      previewLoading = false;
+      previewError.textContent = "无法播放该文件，请确认文件未被移动且浏览器支持该格式。";
+    });
     window.previewVideo = function(taskId) {
       const t = tasks[taskId];
       if (!t || !t.file_path) return;
-      previewTitle.textContent = "预览: " + (t.url || "").slice(0, 50);
+      resetPreview();
+      previewTitle.textContent = "预览: " + taskDisplayTitle(t);
+      previewLoading = true;
       previewVideo.src = "/api/preview/" + taskId;
+      previewVideo.load();
       previewModal.classList.add("show");
     };
     previewClose.addEventListener("click", () => {
       previewModal.classList.remove("show");
-      previewVideo.pause();
-      previewVideo.src = "";
+      resetPreview();
     });
     previewModal.addEventListener("click", e => {
       if (e.target === previewModal) {
         previewModal.classList.remove("show");
-        previewVideo.pause();
-        previewVideo.src = "";
+        resetPreview();
       }
     });
 
@@ -876,7 +943,7 @@
         list.forEach(t => {
           if (!tasks[t.task_id]) {
             tasks[t.task_id] = {
-              task_id: t.task_id, url: t.url || "", status: t.status,
+              task_id: t.task_id, url: t.url || "", title: t.title || "", status: t.status,
               percent: t.percent || 0, file_path: t.file_path || "", error: t.error || "",
             };
           } else {
@@ -884,6 +951,7 @@
             existing.status = t.status || existing.status;
             existing.file_path = t.file_path || existing.file_path;
             existing.error = t.error || existing.error;
+            if (t.title !== undefined) existing.title = t.title;
             if (t.percent != null) existing.percent = t.percent;
           }
         });
@@ -917,7 +985,7 @@
       const id = event.task_id;
       if (!id) return;
       if (!tasks[id]) {
-        tasks[id] = { task_id: id, url: "", status: "RUNNING", percent: 0, file_path: "", error: "" };
+        tasks[id] = { task_id: id, url: "", title: "", status: "RUNNING", percent: 0, file_path: "", error: "" };
       }
       const t = tasks[id];
       if (event.type === "progress") { t.status = "RUNNING"; t.percent = event.percent; }
