@@ -44,7 +44,7 @@
       min-height: 100vh;
     }
 
-    .container { max-width: 880px; margin: 0 auto; padding: 48px 24px 80px; }
+    .container { max-width: 1120px; margin: 0 auto; padding: 48px 32px 80px; }
 
     /* Header */
     header { display: flex; align-items: center; gap: 16px; margin-bottom: 40px; }
@@ -68,27 +68,28 @@
 
     .url-row { position: relative; margin-bottom: 12px; }
     .url-row .input-icon {
-      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+      position: absolute; left: 14px; top: 18px;
       width: 18px; height: 18px; color: var(--text-tertiary); pointer-events: none;
     }
-    .url-row input[type="text"] {
-      width: 100%; padding: 12px 16px 12px 44px;
+    .url-row textarea {
+      width: 100%; min-height: 88px; padding: 14px 16px 14px 44px;
       background: var(--bg); border: 2px solid transparent;
       border-radius: var(--radius-sm); color: var(--text);
       font-size: 15px; font-family: inherit; font-weight: 500;
-      outline: none; transition: all 0.2s;
+      outline: none; transition: all 0.2s; resize: vertical;
+      line-height: 1.7;
     }
-    .url-row input[type="text"]:focus {
+    .url-row textarea:focus {
       background: var(--surface); border-color: var(--border-focus);
       box-shadow: 0 0 0 4px var(--accent-light);
     }
-    .url-row input[type="text"]::placeholder { color: var(--text-tertiary); font-weight: 400; }
+    .url-row textarea::placeholder { color: var(--text-tertiary); font-weight: 400; }
 
     .btn {
       padding: 8px 22px; border: none; border-radius: var(--radius-sm);
       font-size: 14px; font-weight: 600; font-family: inherit;
       cursor: pointer; transition: all 0.2s;
-      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+      display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
     }
     .btn svg { width: 16px; height: 16px; }
     .btn-primary { background: var(--accent-gradient); color: #fff; }
@@ -102,83 +103,84 @@
     .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-small { padding: 5px 12px; font-size: 12px; }
     .btn-small svg { width: 13px; height: 13px; }
+    .btn-success { background: var(--done-text); color: #fff; }
+    .btn-success:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(5,150,105,0.3); }
 
-    .actions-row { display: flex; gap: 10px; align-items: center; }
+    .panel-actions { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 4px; }
+    .url-count { font-size: 13px; color: var(--text-tertiary); margin-right: auto; }
 
-    /* Analyzing spinner */
-    .analyzing {
-      display: none; align-items: center; gap: 10px;
-      padding: 20px 0; color: var(--text-secondary); font-size: 14px;
+    /* Analysis results */
+    .analysis-section { margin-bottom: 32px; }
+    .analysis-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px; padding: 0 4px;
     }
-    .analyzing.show { display: flex; }
+    .analysis-header h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+    .analysis-header .btn { font-size: 13px; padding: 7px 18px; }
+
+    .video-list { display: flex; flex-direction: column; gap: 12px; }
+    .video-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+      padding: 18px 22px; box-shadow: var(--shadow-sm); transition: all 0.2s; animation: slideIn 0.3s ease;
+    }
+    .video-card:hover { box-shadow: var(--shadow-md); border-color: #d0d5dd; }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+    .video-card-top { display: flex; gap: 14px; margin-bottom: 12px; }
+    .video-card img {
+      width: 120px; height: 68px; object-fit: cover; border-radius: 6px; flex-shrink: 0;
+      background: var(--border);
+    }
+    .video-card-meta { flex: 1; min-width: 0; }
+    .video-card-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; word-break: break-all; }
+    .video-card-sub { font-size: 13px; color: var(--text-secondary); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .platform-tag {
+      font-size: 11px; padding: 1px 8px; border-radius: 4px; font-weight: 600;
+      background: var(--accent-light); color: var(--accent);
+    }
+
+    .video-card-bottom {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      padding-top: 12px; border-top: 1px dashed var(--border);
+    }
+
+    .format-select {
+      padding: 7px 32px 7px 12px; background: var(--bg); border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text); font-size: 13px;
+      font-family: inherit; font-weight: 500; cursor: pointer; outline: none; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ba1ab' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center; transition: all 0.2s;
+      min-width: 200px; max-width: 320px;
+    }
+    .format-select:focus { border-color: var(--accent); background-color: var(--surface); }
+
+    .analyzing-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
     .spinner {
-      width: 18px; height: 18px; border: 2.5px solid var(--border);
+      width: 16px; height: 16px; border: 2.5px solid var(--border);
       border-top-color: var(--accent); border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .analyzing-text { font-size: 14px; color: var(--text-secondary); }
 
-    /* Video info panel */
-    .video-info {
-      display: none; margin-top: 16px; padding: 20px;
-      background: var(--bg); border-radius: var(--radius-md); border: 1px solid var(--border);
-    }
-    .video-info.show { display: block; }
-    .video-info-header { display: flex; gap: 16px; margin-bottom: 16px; }
-    .video-info img {
-      width: 120px; height: 68px; object-fit: cover; border-radius: 6px; flex-shrink: 0;
-      background: var(--border);
-    }
-    .video-info-meta { flex: 1; min-width: 0; }
-    .video-info-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; word-break: break-all; }
-    .video-info-sub { font-size: 13px; color: var(--text-secondary); }
-    .video-info-error { color: var(--failed-text); font-size: 14px; }
-
-    /* Format list */
-    .format-list-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; }
-    .format-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-    .format-option {
-      padding: 8px 14px; background: var(--surface); border: 1.5px solid var(--border);
-      border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s;
-      font-size: 13px; font-weight: 500; font-family: inherit;
-      display: flex; flex-direction: column; align-items: center; gap: 2px;
-      min-width: 100px;
-    }
-    .format-option:hover { border-color: var(--accent); }
-    .format-option.selected {
-      border-color: var(--accent); background: var(--accent-light); color: var(--accent);
-    }
-    .format-option .res { font-weight: 700; font-size: 14px; }
-    .format-option .meta { font-size: 11px; color: var(--text-tertiary); }
-    .format-option.selected .meta { color: var(--accent); }
-    .format-option.best {
-      border-color: var(--done-text); background: var(--done-bg);
-    }
-    .format-option.best.selected { border-color: var(--done-text); color: var(--done-text); background: var(--done-bg); }
-    .format-option.best .meta { color: var(--done-text); }
-    .format-badge {
-      font-size: 10px; padding: 1px 6px; border-radius: 4px;
-      background: var(--done-text); color: #fff; font-weight: 600; margin-top: 2px;
-    }
-
-    .download-actions { display: flex; gap: 10px; align-items: center; }
+    .video-card-error { color: var(--failed-text); font-size: 14px; padding: 6px 0; }
 
     /* Cookies */
-    .cookies-section { padding-top: 20px; border-top: 1px solid var(--border); margin-top: 4px; }
+    .cookies-section { padding-top: 20px; border-top: 1px solid var(--border); margin-top: 16px; }
     .cookies-label {
       font-size: 13px; font-weight: 600; color: var(--text-secondary);
       margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
     }
     .cookies-label svg { width: 14px; height: 14px; }
     .cookies-controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-    select {
+    select.cookies-select {
       padding: 10px 36px 10px 14px; background: var(--bg); border: 2px solid transparent;
       border-radius: var(--radius-sm); color: var(--text); font-size: 14px;
       font-family: inherit; font-weight: 500; cursor: pointer; outline: none; appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ba1ab' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
       background-repeat: no-repeat; background-position: right 12px center; transition: all 0.2s;
     }
-    select:focus { background-color: var(--surface); border-color: var(--border-focus); box-shadow: 0 0 0 4px var(--accent-light); }
+    select.cookies-select:focus { background-color: var(--surface); border-color: var(--border-focus); box-shadow: 0 0 0 4px var(--accent-light); }
     input[type="file"] { font-size: 13px; color: var(--text-secondary); font-family: inherit; }
     .btn-upload {
       padding: 10px 18px; background: var(--surface); border: 1.5px solid var(--border);
@@ -212,7 +214,6 @@
       padding: 20px 24px; box-shadow: var(--shadow-sm); transition: all 0.2s; animation: slideIn 0.3s ease;
     }
     .task-card:hover { box-shadow: var(--shadow-md); border-color: #d0d5dd; }
-    @keyframes slideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 
     .task-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 12px; }
     .task-url { font-size: 14px; font-weight: 600; color: var(--text); word-break: break-all; flex: 1; line-height: 1.5; }
@@ -263,15 +264,13 @@
     .modal-close:hover { background: var(--failed-bg); color: var(--failed-text); }
     .modal-content video { max-width: 100%; max-height: 70vh; border-radius: var(--radius-sm); }
 
-    @media (max-width: 640px) {
+    @media (max-width: 768px) {
       .container { padding: 32px 16px 60px; }
-      .actions-row { flex-wrap: wrap; }
       .cookies-controls { flex-direction: column; align-items: stretch; }
-      select { width: 100%; }
       .task-top { flex-direction: column-reverse; }
       .task-bottom { flex-wrap: wrap; }
-      .video-info-header { flex-direction: column; }
-      .video-info img { width: 100%; height: 180px; }
+      .video-card-top { flex-direction: column; }
+      .video-card img { width: 100%; height: 180px; }
     }
   </style>
 </head>
@@ -296,26 +295,16 @@
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
         </svg>
-        <input type="text" id="url" placeholder="粘贴视频链接..." />
+        <textarea id="url-input" placeholder="粘贴视频链接，每行一个，支持多平台同时分析..."></textarea>
       </div>
 
-      <div class="actions-row">
-        <button id="analyze-btn" class="btn btn-primary">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-          </svg>
-          分析
+      <div class="panel-actions">
+        <span class="url-count" id="url-count"></span>
+        <button id="clear-btn" class="btn btn-secondary btn-small">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          清空
         </button>
       </div>
-
-      <!-- Analyzing spinner -->
-      <div id="analyzing" class="analyzing">
-        <div class="spinner"></div>
-        <span>正在分析视频信息...</span>
-      </div>
-
-      <!-- Video info + format selection -->
-      <div id="video-info" class="video-info"></div>
 
       <!-- Cookies -->
       <div class="cookies-section">
@@ -329,7 +318,7 @@
           Cookies 来源(会员内容)
         </div>
         <div class="cookies-controls">
-          <select id="cookies-source">
+          <select id="cookies-source" class="cookies-select">
             <option value="">不需要</option>
             <option value="browser:chrome">Chrome 浏览器</option>
             <option value="browser:edge">Edge 浏览器</option>
@@ -353,6 +342,20 @@
           <span id="legal-notice-text"></span>
         </div>
       </div>
+    </section>
+
+    <!-- Analysis results -->
+    <section class="analysis-section" id="analysis-section" style="display:none;">
+      <div class="analysis-header">
+        <h2>分析结果</h2>
+        <button id="download-all-btn" class="btn btn-success">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+          </svg>
+          全部下载
+        </button>
+      </div>
+      <div id="video-list" class="video-list"></div>
     </section>
 
     <!-- Tasks -->
@@ -381,13 +384,15 @@
 
   <script>
     const tasks = {};
-    let selectedFormat = null; // "best" or format_id
-    let analyzedUrl = null;
+    // analyzed videos: { url: { status: "analyzing"|"done"|"error", data: {...}, selectedFormat: "best"|format_id } }
+    const analyzedVideos = {};
 
-    const urlInput = document.getElementById("url");
-    const analyzeBtn = document.getElementById("analyze-btn");
-    const analyzingBox = document.getElementById("analyzing");
-    const videoInfoBox = document.getElementById("video-info");
+    const urlInput = document.getElementById("url-input");
+    const urlCount = document.getElementById("url-count");
+    const clearBtn = document.getElementById("clear-btn");
+    const analysisSection = document.getElementById("analysis-section");
+    const videoList = document.getElementById("video-list");
+    const downloadAllBtn = document.getElementById("download-all-btn");
     const taskList = document.getElementById("task-list");
     const wsDot = document.getElementById("ws-dot");
     const wsLabel = document.getElementById("ws-label");
@@ -404,6 +409,7 @@
     const previewClose = document.getElementById("preview-close");
 
     let legalNoticeTextCache = "";
+    let debounceTimer = null;
 
     function shortId(id) { return id ? id.slice(0, 8) : ""; }
     function escapeHtml(s) {
@@ -414,7 +420,7 @@
       if (!s) return "—";
       const m = Math.floor(s / 60);
       const sec = Math.floor(s % 60);
-      return `${m}:${sec.toString().padStart(2,'0')}`;
+      return m + ":" + sec.toString().padStart(2,'0');
     }
     function formatFilesize(b) {
       if (!b) return "—";
@@ -422,28 +428,60 @@
       if (b > 1024) return (b/1024).toFixed(0) + " KB";
       return b + " B";
     }
-
-    // Extract resolution height from "WxH" string for sorting
     function resHeight(res) {
       if (!res) return 0;
       const parts = res.split("x");
       if (parts.length >= 2) return parseInt(parts[parts.length-1]) || 0;
-      // Try to parse "720p" style
       const m = res.match(/(\d+)p/i);
       return m ? parseInt(m[1]) : 0;
     }
 
-    // Analyze URL: call /api/info, show video info + format options
-    async function analyzeUrl() {
-      const url = urlInput.value.trim();
-      if (!url) { urlInput.focus(); return; }
+    // Parse URLs from textarea (one per line)
+    function parseUrls() {
+      return urlInput.value
+        .split("\n")
+        .map(s => s.trim())
+        .filter(s => s.length > 0 && /^https?:\/\//i.test(s));
+    }
 
-      analyzedUrl = url;
-      selectedFormat = "best";
-      analyzeBtn.disabled = true;
-      analyzingBox.classList.add("show");
-      videoInfoBox.classList.remove("show");
-      videoInfoBox.innerHTML = "";
+    // Auto-analyze with debounce
+    function onUrlInput() {
+      const urls = parseUrls();
+      urlCount.textContent = urls.length > 0 ? urls.length + " 个链接" : "";
+
+      if (urls.length === 0) {
+        analysisSection.style.display = "none";
+        return;
+      }
+
+      // Mark new URLs for analysis, remove stale ones
+      const urlSet = new Set(urls);
+      for (const key of Object.keys(analyzedVideos)) {
+        if (!urlSet.has(key)) delete analyzedVideos[key];
+      }
+      for (const url of urls) {
+        if (!analyzedVideos[url]) {
+          analyzedVideos[url] = { status: "pending", data: null, selectedFormat: "best" };
+        }
+      }
+
+      renderVideoList();
+
+      // Debounce: analyze after 1.5s of no typing
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        for (const url of urls) {
+          if (analyzedVideos[url] && analyzedVideos[url].status === "pending") {
+            analyzeOne(url);
+          }
+        }
+      }, 1500);
+    }
+
+    // Analyze a single URL
+    async function analyzeOne(url) {
+      analyzedVideos[url].status = "analyzing";
+      renderVideoList();
 
       try {
         const body = { url };
@@ -455,87 +493,115 @@
         });
         const data = await resp.json();
         if (data.error) {
-          videoInfoBox.innerHTML = `<div class="video-info-error">分析失败: ${escapeHtml(data.error)}</div>`;
-          videoInfoBox.classList.add("show");
-          return;
+          analyzedVideos[url].status = "error";
+          analyzedVideos[url].data = { error: data.error };
+        } else {
+          analyzedVideos[url].status = "done";
+          analyzedVideos[url].data = data;
         }
-        renderVideoInfo(data);
       } catch (e) {
-        videoInfoBox.innerHTML = `<div class="video-info-error">请求出错: ${escapeHtml(e.message)}</div>`;
-        videoInfoBox.classList.add("show");
-      } finally {
-        analyzeBtn.disabled = false;
-        analyzingBox.classList.remove("show");
+        analyzedVideos[url].status = "error";
+        analyzedVideos[url].data = { error: e.message };
       }
+      renderVideoList();
     }
 
-    function renderVideoInfo(data) {
-      const formats = data.formats || [];
-      // Sort by resolution descending
-      formats.sort((a, b) => resHeight(b.resolution) - resHeight(a.resolution));
+    // Render the video list
+    function renderVideoList() {
+      const urls = Object.keys(analyzedVideos);
+      if (urls.length === 0) {
+        analysisSection.style.display = "none";
+        return;
+      }
+      analysisSection.style.display = "";
 
-      let thumbnailHtml = data.thumbnail
-        ? `<img src="${escapeHtml(data.thumbnail)}" onerror="this.style.display='none'" />`
-        : "";
+      videoList.innerHTML = urls.map(url => {
+        const v = analyzedVideos[url];
+        if (v.status === "pending" || v.status === "analyzing") {
+          return '<div class="video-card">' +
+            '<div class="analyzing-row"><div class="spinner"></div>' +
+            '<span class="analyzing-text">' + (v.status === "pending" ? "等待分析..." : "正在分析视频信息...") + "</span></div>" +
+            '<div class="video-card-sub" style="font-size:13px;color:var(--text-tertiary);word-break:break-all;margin-top:4px;">' + escapeHtml(url) + "</div>" +
+            "</div>";
+        }
+        if (v.status === "error") {
+          return '<div class="video-card">' +
+            '<div class="video-card-error">分析失败: ' + escapeHtml(v.data.error) + "</div>" +
+            '<div class="video-card-sub" style="font-size:13px;color:var(--text-tertiary);word-break:break-all;">' + escapeHtml(url) + "</div>" +
+            "</div>";
+        }
+        // done
+        const data = v.data;
+        const formats = (data.formats || []).slice().sort((a, b) => resHeight(b.resolution) - resHeight(a.resolution));
+        let thumbnailHtml = data.thumbnail
+          ? '<img src="' + escapeHtml(data.thumbnail) + '" onerror="this.style.display=\'none\'" />'
+          : '<div style="width:120px;height:68px;border-radius:6px;background:var(--border);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#ccc" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>';
 
-      let formatsHtml = "";
-      // "最佳画质" option (default)
-      formatsHtml += `<div class="format-option best selected" data-format-id="best" onclick="selectFormat(this)">
-        <span class="res">最佳画质</span>
-        <span class="meta">自动选择最高</span>
-        <span class="format-badge">推荐</span>
-      </div>`;
-      // Individual format options
-      for (const f of formats) {
-        const h = resHeight(f.resolution);
-        if (h === 0 && !f.note) continue; // skip unusable formats
-        const fps = f.fps ? `${Math.round(f.fps)}fps` : "";
-        const size = formatFilesize(f.filesize);
-        const metaParts = [f.ext, fps, size].filter(Boolean);
-        formatsHtml += `<div class="format-option" data-format-id="${escapeHtml(f.format_id)}" onclick="selectFormat(this)">
-          <span class="res">${escapeHtml(f.resolution || f.note || f.format_id)}</span>
-          <span class="meta">${escapeHtml(metaParts.join(" · "))}</span>
-        </div>`;
+        let optionsHtml = '<option value="best">最佳画质 (自动选择最高)</option>';
+        for (const f of formats) {
+          const h = resHeight(f.resolution);
+          if (h === 0 && !f.note) continue;
+          const fps = f.fps ? Math.round(f.fps) + "fps" : "";
+          const size = formatFilesize(f.filesize);
+          const metaParts = [f.ext, fps, size].filter(Boolean);
+          const label = (f.resolution || f.note || f.format_id) + " (" + metaParts.join(" / ") + ")";
+          optionsHtml += '<option value="' + escapeHtml(f.format_id) + '">' + escapeHtml(label) + "</option>";
+        }
+
+        return '<div class="video-card">' +
+          '<div class="video-card-top">' +
+            thumbnailHtml +
+            '<div class="video-card-meta">' +
+              '<div class="video-card-title">' + escapeHtml(data.title || "(无标题)") + "</div>" +
+              '<div class="video-card-sub">' +
+                '<span class="platform-tag">' + escapeHtml(data.platform || "") + "</span>" +
+                "<span>" + escapeHtml(data.uploader || "未知上传者") + "</span>" +
+                "<span>· " + formatDuration(data.duration) + "</span>" +
+              "</div>" +
+            "</div>" +
+          "</div>" +
+          '<div class="video-card-bottom">' +
+            '<select class="format-select" data-url="' + escapeHtml(url) + '" onchange="onFormatChange(this)">' + optionsHtml + "</select>" +
+            '<button class="btn btn-primary btn-small" onclick="downloadOne(\'' + escapeHtml(url) + "')\">" +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" /></svg>' +
+              "下载" +
+            "</button>" +
+          "</div>" +
+        "</div>";
+      }).join("");
+
+      // Restore selected formats
+      for (const url of Object.keys(analyzedVideos)) {
+        const v = analyzedVideos[url];
+        if (v.status === "done" && v.selectedFormat) {
+          const sel = videoList.querySelector('.format-select[data-url="' + url.replace(/"/g, '\\"') + '"]');
+          if (sel) sel.value = v.selectedFormat;
+        }
       }
 
-      videoInfoBox.innerHTML = `
-        <div class="video-info-header">
-          ${thumbnailHtml}
-          <div class="video-info-meta">
-            <div class="video-info-title">${escapeHtml(data.title || "(无标题)")}</div>
-            <div class="video-info-sub">
-              ${escapeHtml(data.uploader || "未知上传者")} · ${formatDuration(data.duration)} · ${escapeHtml(data.platform || "")}
-            </div>
-          </div>
-        </div>
-        <div class="format-list-label">选择清晰度</div>
-        <div class="format-options">${formatsHtml}</div>
-        <div class="download-actions">
-          <button id="download-btn" class="btn btn-primary" onclick="startDownload()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
-            </svg>
-            下载
-          </button>
-        </div>`;
-      videoInfoBox.classList.add("show");
+      // Update download-all button state
+      const doneCount = urls.filter(u => analyzedVideos[u].status === "done").length;
+      downloadAllBtn.disabled = doneCount === 0;
     }
 
-    window.selectFormat = function(el) {
-      document.querySelectorAll(".format-option").forEach(o => o.classList.remove("selected"));
-      el.classList.add("selected");
-      selectedFormat = el.dataset.formatId;
+    window.onFormatChange = function(sel) {
+      const url = sel.dataset.url;
+      if (analyzedVideos[url]) {
+        analyzedVideos[url].selectedFormat = sel.value;
+      }
     };
 
-    window.startDownload = async function() {
-      const url = analyzedUrl || urlInput.value.trim();
-      if (!url) return;
-      const downloadBtn = document.getElementById("download-btn");
-      if (downloadBtn) downloadBtn.disabled = true;
+    window.downloadOne = async function(url) {
+      const v = analyzedVideos[url];
+      if (!v || v.status !== "done") return;
+      await submitDownload(url, v.selectedFormat || "best");
+    };
+
+    async function submitDownload(url, formatId) {
       try {
         const body = {
           url,
-          quality: selectedFormat === "best" ? null : selectedFormat,
+          quality: formatId === "best" ? null : formatId,
           output_dir: "./downloads",
         };
         Object.assign(body, getCookiesParams());
@@ -548,20 +614,30 @@
         const data = await resp.json();
         tasks[data.task_id] = { task_id: data.task_id, url, status: "PENDING", percent: 0, file_path: "", error: "" };
         renderTasks();
-        // Clear analysis panel
-        videoInfoBox.classList.remove("show");
-        videoInfoBox.innerHTML = "";
-        analyzedUrl = null;
-        urlInput.value = "";
       } catch (e) {
         alert("提交出错:" + e.message);
-      } finally {
-        if (downloadBtn) downloadBtn.disabled = false;
       }
-    };
+    }
 
-    analyzeBtn.addEventListener("click", analyzeUrl);
-    urlInput.addEventListener("keydown", e => { if (e.key === "Enter") analyzeUrl(); });
+    downloadAllBtn.addEventListener("click", async () => {
+      const urls = Object.keys(analyzedVideos).filter(u => analyzedVideos[u].status === "done");
+      downloadAllBtn.disabled = true;
+      for (const url of urls) {
+        const v = analyzedVideos[url];
+        await submitDownload(url, v.selectedFormat || "best");
+      }
+      downloadAllBtn.disabled = false;
+    });
+
+    urlInput.addEventListener("input", onUrlInput);
+
+    clearBtn.addEventListener("click", () => {
+      urlInput.value = "";
+      for (const key of Object.keys(analyzedVideos)) delete analyzedVideos[key];
+      urlCount.textContent = "";
+      analysisSection.style.display = "none";
+      videoList.innerHTML = "";
+    });
 
     function getCookiesParams() {
       const val = cookiesSource.value;
@@ -635,13 +711,11 @@
     function renderTasks() {
       const ids = Object.keys(tasks);
       if (ids.length === 0) {
-        taskList.innerHTML = `
-          <div class="card empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-            </svg>
-            <p>暂无任务,粘贴链接开始下载</p>
-          </div>`;
+        taskList.innerHTML =
+          '<div class="card empty-state">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>' +
+            "<p>暂无任务,粘贴链接开始下载</p>" +
+          "</div>";
         return;
       }
       ids.sort().reverse();
@@ -651,42 +725,42 @@
         const pctText = t.percent != null ? pct.toFixed(0) + "%" : "—";
         let actionsHtml = "";
         if (t.status === "DONE" && t.file_path) {
-          actionsHtml = `<div class="task-actions">
-            <button class="btn btn-secondary btn-small" onclick="previewVideo('${id}')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              预览
-            </button>
-            <button class="btn btn-secondary btn-small" onclick="openFolder('${id}')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-              打开目录
-            </button>
-            <div class="task-file">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              ${escapeHtml(t.file_path)}
-            </div>
-          </div>`;
+          actionsHtml = '<div class="task-actions">' +
+            '<button class="btn btn-secondary btn-small" onclick="previewVideo(\'' + id + "')\">" +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+              "预览" +
+            "</button>" +
+            '<button class="btn btn-secondary btn-small" onclick="openFolder(\'' + id + "')\">" +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+              "打开目录" +
+            "</button>" +
+            '<div class="task-file">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
+              escapeHtml(t.file_path) +
+            "</div>" +
+          "</div>";
         } else if (t.status === "FAILED" && t.error) {
-          actionsHtml = `<div class="task-actions">
-            <div class="task-file task-error">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              ${escapeHtml(t.error)}
-            </div>
-          </div>`;
+          actionsHtml = '<div class="task-actions">' +
+            '<div class="task-file task-error">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+              escapeHtml(t.error) +
+            "</div>" +
+          "</div>";
         }
-        return `<div class="task-card">
-          <div class="task-top">
-            <div class="task-url">${escapeHtml(t.url || "(等待 URL)")}</div>
-            <div class="task-id">${escapeHtml(shortId(t.task_id))}</div>
-          </div>
-          <div class="task-bottom">
-            <span class="badge badge-${t.status}">${t.status}</span>
-            <div class="progress-wrapper">
-              <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-              <span class="progress-text">${pctText}</span>
-            </div>
-          </div>
-          ${actionsHtml}
-        </div>`;
+        return '<div class="task-card">' +
+          '<div class="task-top">' +
+            '<div class="task-url">' + escapeHtml(t.url || "(等待 URL)") + "</div>" +
+            '<div class="task-id">' + escapeHtml(shortId(t.task_id)) + "</div>" +
+          "</div>" +
+          '<div class="task-bottom">' +
+            '<span class="badge badge-' + t.status + '">' + t.status + "</span>" +
+            '<div class="progress-wrapper">' +
+              '<div class="progress-track"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+              '<span class="progress-text">' + pctText + "</span>" +
+            "</div>" +
+          "</div>" +
+          actionsHtml +
+        "</div>";
       }).join("");
     }
 
@@ -732,12 +806,10 @@
               percent: t.percent || 0, file_path: t.file_path || "", error: t.error || "",
             };
           } else {
-            // Update existing task with API data (fixes refresh progress loss)
             const existing = tasks[t.task_id];
             existing.status = t.status || existing.status;
             existing.file_path = t.file_path || existing.file_path;
             existing.error = t.error || existing.error;
-            // Only update percent from API if WebSocket hasn't given a more recent one
             if (t.percent != null) existing.percent = t.percent;
           }
         });
