@@ -66,24 +66,38 @@
     /* Download Panel */
     .download-panel { padding: 28px; margin-bottom: 32px; }
 
-    .url-row { position: relative; margin-bottom: 12px; }
-    .url-row .input-icon {
-      position: absolute; left: 14px; top: 18px;
+    .url-toolbar {
+      display: flex; gap: 10px; align-items: center; margin-bottom: 12px;
+    }
+    .url-toolbar .url-count { margin-left: auto; font-size: 13px; color: var(--text-tertiary); }
+
+    .url-inputs { display: flex; flex-direction: column; gap: 8px; }
+    .url-line { display: flex; gap: 8px; align-items: center; }
+    .url-input-wrap { position: relative; flex: 1; }
+    .url-input-wrap .input-icon {
+      position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
       width: 18px; height: 18px; color: var(--text-tertiary); pointer-events: none;
     }
-    .url-row textarea {
-      width: 100%; min-height: 88px; padding: 14px 16px 14px 44px;
+    .url-input {
+      width: 100%; padding: 12px 16px 12px 40px;
       background: var(--bg); border: 2px solid transparent;
       border-radius: var(--radius-sm); color: var(--text);
       font-size: 15px; font-family: inherit; font-weight: 500;
-      outline: none; transition: all 0.2s; resize: vertical;
-      line-height: 1.7;
+      outline: none; transition: all 0.2s; line-height: 1.5;
     }
-    .url-row textarea:focus {
+    .url-input:focus {
       background: var(--surface); border-color: var(--border-focus);
       box-shadow: 0 0 0 4px var(--accent-light);
     }
-    .url-row textarea::placeholder { color: var(--text-tertiary); font-weight: 400; }
+    .url-input::placeholder { color: var(--text-tertiary); font-weight: 400; }
+    .btn-remove-url {
+      width: 38px; height: 42px; border: 1.5px solid var(--border);
+      background: var(--surface); border-radius: var(--radius-sm);
+      color: var(--text-tertiary); cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+    }
+    .btn-remove-url:hover { border-color: var(--failed-text); color: var(--failed-text); background: var(--failed-bg); }
+    .btn-remove-url svg { width: 14px; height: 14px; }
 
     .btn {
       padding: 8px 22px; border: none; border-radius: var(--radius-sm);
@@ -105,9 +119,6 @@
     .btn-small svg { width: 13px; height: 13px; }
     .btn-success { background: var(--done-text); color: #fff; }
     .btn-success:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(5,150,105,0.3); }
-
-    .panel-actions { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 4px; }
-    .url-count { font-size: 13px; color: var(--text-tertiary); margin-right: auto; }
 
     /* Analysis results */
     .analysis-section { margin-bottom: 32px; }
@@ -290,21 +301,19 @@
 
     <!-- Download Panel -->
     <section class="card download-panel">
-      <div class="url-row">
-        <svg class="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-        </svg>
-        <textarea id="url-input" placeholder="粘贴视频链接，每行一个，支持多平台同时分析..."></textarea>
-      </div>
-
-      <div class="panel-actions">
-        <span class="url-count" id="url-count"></span>
+      <div class="url-toolbar">
         <button id="clear-btn" class="btn btn-secondary btn-small">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           清空
         </button>
+        <button id="add-url-btn" class="btn btn-secondary btn-small">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          添加链接
+        </button>
+        <span class="url-count" id="url-count"></span>
       </div>
+
+      <div id="url-inputs" class="url-inputs"></div>
 
       <!-- Cookies -->
       <div class="cookies-section">
@@ -387,9 +396,10 @@
     // analyzed videos: { url: { status: "analyzing"|"done"|"error", data: {...}, selectedFormat: "best"|format_id } }
     const analyzedVideos = {};
 
-    const urlInput = document.getElementById("url-input");
+    const urlInputsContainer = document.getElementById("url-inputs");
     const urlCount = document.getElementById("url-count");
     const clearBtn = document.getElementById("clear-btn");
+    const addUrlBtn = document.getElementById("add-url-btn");
     const analysisSection = document.getElementById("analysis-section");
     const videoList = document.getElementById("video-list");
     const downloadAllBtn = document.getElementById("download-all-btn");
@@ -436,11 +446,71 @@
       return m ? parseInt(m[1]) : 0;
     }
 
-    // Parse URLs from textarea (one per line)
+    // Create a single URL input row
+    function createUrlRow(value) {
+      const line = document.createElement("div");
+      line.className = "url-line";
+      const wrap = document.createElement("div");
+      wrap.className = "url-input-wrap";
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("class", "input-icon");
+      icon.setAttribute("viewBox", "0 0 24 24");
+      icon.setAttribute("fill", "none");
+      icon.setAttribute("stroke", "currentColor");
+      icon.setAttribute("stroke-width", "2");
+      icon.setAttribute("stroke-linecap", "round");
+      icon.innerHTML = '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />';
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "url-input";
+      input.placeholder = "粘贴视频链接...";
+      input.value = value || "";
+      input.addEventListener("input", onUrlInput);
+      input.addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (input.value.trim()) {
+            const idx = Array.from(urlInputsContainer.children).indexOf(line);
+            addUrlRow("", idx + 1);
+          }
+        }
+      });
+      wrap.appendChild(icon);
+      wrap.appendChild(input);
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn-remove-url";
+      removeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+      removeBtn.addEventListener("click", () => removeUrlRow(line));
+      line.appendChild(wrap);
+      line.appendChild(removeBtn);
+      return line;
+    }
+
+    function addUrlRow(value, index) {
+      const row = createUrlRow(value || "");
+      if (index != null) {
+        urlInputsContainer.insertBefore(row, urlInputsContainer.children[index]);
+      } else {
+        urlInputsContainer.appendChild(row);
+      }
+      row.querySelector(".url-input").focus();
+    }
+
+    function removeUrlRow(line) {
+      if (urlInputsContainer.children.length <= 1) {
+        line.querySelector(".url-input").value = "";
+        onUrlInput();
+        return;
+      }
+      line.remove();
+      onUrlInput();
+    }
+
+    // Parse URLs from all single-line inputs
     function parseUrls() {
-      return urlInput.value
-        .split("\n")
-        .map(s => s.trim())
+      return Array.from(urlInputsContainer.querySelectorAll(".url-input"))
+        .map(inp => inp.value.trim())
         .filter(s => s.length > 0 && /^https?:\/\//i.test(s));
     }
 
@@ -629,15 +699,19 @@
       downloadAllBtn.disabled = false;
     });
 
-    urlInput.addEventListener("input", onUrlInput);
+    addUrlBtn.addEventListener("click", () => addUrlRow());
 
     clearBtn.addEventListener("click", () => {
-      urlInput.value = "";
+      urlInputsContainer.innerHTML = "";
+      addUrlRow("");
       for (const key of Object.keys(analyzedVideos)) delete analyzedVideos[key];
       urlCount.textContent = "";
       analysisSection.style.display = "none";
       videoList.innerHTML = "";
     });
+
+    // Initialize with one empty URL row
+    addUrlRow("");
 
     function getCookiesParams() {
       const val = cookiesSource.value;
