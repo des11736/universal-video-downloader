@@ -456,9 +456,15 @@
     }
 
     function renderCover(data) {
-      if (!data.preview_url) return coverFallbackHtml(data.thumbnail);
-      return '<video class="video-cover" muted playsinline preload="auto" data-thumbnail="' +
-        escapeHtml(data.thumbnail || "") + '" src="' + escapeHtml(data.preview_url) + '"></video>';
+      const thumbnail = data.thumbnail || "";
+      if (data.preview_url) {
+        // 用 video 标签加载首帧:poster 兜底缩略图,#t=0.1 强制渲染首帧,preload=metadata 减少流量
+        const posterAttr = thumbnail ? ' poster="' + escapeHtml(thumbnail) + '"' : '';
+        return '<video class="video-cover" muted playsinline preload="metadata"' +
+          ' data-thumbnail="' + escapeHtml(thumbnail) + '"' + posterAttr +
+          ' src="' + escapeHtml(data.preview_url + '#t=0.1') + '"></video>';
+      }
+      return coverFallbackHtml(thumbnail);
     }
 
     function createCoverFallback(thumbnail) {
@@ -469,7 +475,12 @@
 
     function bindVideoCovers() {
       videoList.querySelectorAll("video.video-cover").forEach(video => {
-        video.addEventListener("loadeddata", () => video.pause(), { once: true });
+        // loadeddata:首帧已加载,暂停在首帧(不自动播放)
+        video.addEventListener("loadeddata", () => {
+          try { video.currentTime = 0.1; } catch (e) {}
+          video.pause();
+        }, { once: true });
+        // error:preview_url 无法加载(可能是签名过期或格式不支持),回退到缩略图
         video.addEventListener("error", () => {
           video.replaceWith(createCoverFallback(video.dataset.thumbnail));
         }, { once: true });
@@ -851,7 +862,7 @@
         let actionsHtml = "";
         if (t.status === "DONE" && t.file_path) {
           actionsHtml = '<div class="task-actions">' +
-            '<button class="btn btn-secondary btn-small" onclick="previewVideo(\'' + id + "')\">" +
+            '<button class="btn btn-secondary btn-small" onclick="openPreview(\'' + id + "')\">" +
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
               "预览" +
             "</button>" +
@@ -905,7 +916,7 @@
       previewLoading = false;
       previewError.textContent = "无法播放该文件，请确认文件未被移动且浏览器支持该格式。";
     });
-    window.previewVideo = function(taskId) {
+    window.openPreview = function(taskId) {
       const t = tasks[taskId];
       if (!t || !t.file_path) return;
       resetPreview();
@@ -978,6 +989,8 @@
         setWsState(false);
         setTimeout(connectWs, reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 2, 15000);
+        // 重连后刷新一次任务列表,补偿断连期间错过的更新
+        setTimeout(refreshTasks, 1000);
       };
       ws.onerror = () => { try { ws.close(); } catch (e) {} };
     }
@@ -997,6 +1010,8 @@
     refreshTasks();
     loadCookiesList();
     connectWs();
+    // 兜底轮询:每 5 秒刷新一次任务列表,防止 WebSocket 事件丢失
+    setInterval(refreshTasks, 5000);
   </script>
 </body>
 </html>
