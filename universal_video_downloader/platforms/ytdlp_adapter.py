@@ -243,19 +243,26 @@ class YtDlpAdapter(PlatformDownloader):
             "postprocessor_hooks": [_postprocessor_hook],
         }
 
-        # 画质选择:传 quality 时直接用 format_id;未传时自动选择最佳画质并合并为 mp4
-        if options.quality:
-            opts["format"] = options.quality
-        else:
-            # 自动按分辨率/HDR/编码/码率排序,选最佳视频与音频流,合并输出 mp4
-            # format_sort:res(分辨率)优先,然后 hdr/vcodec/fps/vbr/abr/size
-            opts["format_sort"] = [
-                "res:4", "hdr:1", "vcodec:1", "fps:1",
-                "vbr:1", "abr:1", "size:1", "br:1",
-            ]
-            # 尝试 bestvideo+bestaudio 合并,回退到 best
+        # 画质选择:
+        # - quality 为空或 "best":自动选最佳画质(bestvideo+bestaudio 合并)
+        # - quality 是单个 format_id:用 "format_id+bestaudio/best"
+        #   既保留用户选的视频流,又自动补最佳音频流(DASH 平台视频流通常无音频)
+        # - quality 是复杂表达式(含 + / , 等):直接使用
+        #
+        # 注意:不设置 format_sort,使用 yt-dlp 默认排序。
+        # 之前用的 ["res:4", ...] 会干扰 bestvideo 的选择,
+        # 导致 B站 1080p 可用时仍选了 640x360(yt-dlp 默认排序已正确选最高画质)。
+        quality = (options.quality or "").strip()
+        opts["merge_output_format"] = "mp4"
+        if not quality or quality == "best":
+            # 自动选最佳画质:优先分离的视频+音频流合并,回退到最佳渐进式流
             opts["format"] = "bestvideo+bestaudio/best"
-            opts["merge_output_format"] = "mp4"
+        elif "+" in quality or "/" in quality or "," in quality:
+            # 复杂格式表达式(如 "137+140" 或 "bestvideo+bestaudio"),直接使用
+            opts["format"] = quality
+        else:
+            # 单个 format_id:补最佳音频流,确保下载的视频有声音
+            opts["format"] = quality + "+bestaudio/best"
 
         # cookies 支持:cookiefile 优先,其次从浏览器读取
         using_cookies = False

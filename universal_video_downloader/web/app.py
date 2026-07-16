@@ -46,6 +46,22 @@ from .wechat_listener import WechatPageListener
 app = FastAPI(title="UVD Web UI")
 logger = logging.getLogger(__name__)
 
+
+@app.middleware("http")
+async def no_cache_html(request: Any, call_next: Any):
+    """为 HTML 页面设置 no-cache 头,防止浏览器缓存旧版前端代码。
+
+    只对 text/html 响应生效,静态资源(CSS/JS/图片)不受影响。
+    这解决了用户修改前端后浏览器仍使用缓存旧版本的问题。
+    """
+    response = await call_next(request)
+    content_type = response.headers.get("content-type", "")
+    if "text/html" in content_type:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 # 全局状态(单进程内)
 _dispatcher: Optional[Dispatcher] = None  # 懒加载的调度器
 _config: Optional[AppConfig] = None  # 与调度器配套的应用配置

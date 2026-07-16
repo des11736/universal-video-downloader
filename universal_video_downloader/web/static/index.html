@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>UVD · 通用视频下载器</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
@@ -909,17 +912,29 @@
       previewError.textContent = "";
       previewVideo.pause();
       previewVideo.removeAttribute("src");
-      previewVideo.load();
+      // 不调用 load(),避免触发 error 事件竞态(openPreview 中再 load)
     }
     previewVideo.addEventListener("error", () => {
       if (!previewLoading) return;
       previewLoading = false;
-      previewError.textContent = "无法播放该文件，请确认文件未被移动且浏览器支持该格式。";
+      // 提供更详细的错误提示,帮助用户判断问题
+      const ext = (previewVideo.src.match(/\.(mp4|webm|m4v|mkv|avi|mov)/i) || [])[0] || "";
+      let msg = "无法在浏览器中播放该视频。";
+      if (ext && [".mkv", ".avi", ".mov"].includes(ext.toLowerCase())) {
+        msg += " " + ext.toUpperCase() + " 格式浏览器不支持预览,请使用"打开目录"在本地播放器中查看。";
+      } else {
+        msg += " 可能是视频编码(如 AV1/VP9)不被当前浏览器支持,请尝试用"打开目录"在本地播放器中查看。";
+      }
+      previewError.textContent = msg;
+    });
+    previewVideo.addEventListener("loadeddata", () => {
+      previewLoading = false;
     });
     window.openPreview = function(taskId) {
       const t = tasks[taskId];
       if (!t || !t.file_path) return;
-      resetPreview();
+      previewError.textContent = "";
+      previewVideo.pause();
       previewTitle.textContent = "预览: " + taskDisplayTitle(t);
       previewLoading = true;
       previewVideo.src = "/api/preview/" + taskId;
