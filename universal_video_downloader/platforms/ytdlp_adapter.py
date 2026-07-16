@@ -255,8 +255,14 @@ class YtDlpAdapter(PlatformDownloader):
         quality = (options.quality or "").strip()
         opts["merge_output_format"] = "mp4"
         if not quality or quality == "best":
-            # 自动选最佳画质:优先分离的视频+音频流合并,回退到最佳渐进式流
-            opts["format"] = "bestvideo+bestaudio/best"
+            # 自动选最佳画质:优先 H.264/AVC 编码(浏览器原生支持预览),
+            # 回退到任意编码的 bestvideo,最后回退到最佳渐进式流。
+            # 之前用 "bestvideo+bestaudio/best" 会选到 AV1 编码,
+            # 虽然画质相同但浏览器 <video> 可能无法播放(软解卡顿或编解码器缺失)。
+            opts["format"] = (
+                "bestvideo[vcodec^=avc]+bestaudio/"
+                "bestvideo+bestaudio/best"
+            )
         elif "+" in quality or "/" in quality or "," in quality:
             # 复杂格式表达式(如 "137+140" 或 "bestvideo+bestaudio"),直接使用
             opts["format"] = quality

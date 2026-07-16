@@ -921,9 +921,9 @@
       const ext = (previewVideo.src.match(/\.(mp4|webm|m4v|mkv|avi|mov)/i) || [])[0] || "";
       let msg = "无法在浏览器中播放该视频。";
       if (ext && [".mkv", ".avi", ".mov"].includes(ext.toLowerCase())) {
-        msg += " " + ext.toUpperCase() + " 格式浏览器不支持预览,请使用"打开目录"在本地播放器中查看。";
+        msg += " " + ext.toUpperCase() + " 格式浏览器不支持预览,请使用\"打开目录\"在本地播放器中查看。";
       } else {
-        msg += " 可能是视频编码(如 AV1/VP9)不被当前浏览器支持,请尝试用"打开目录"在本地播放器中查看。";
+        msg += " 可能是视频编码(如 AV1/VP9)不被当前浏览器支持,请尝试用\"打开目录\"在本地播放器中查看。";
       }
       previewError.textContent = msg;
     });
