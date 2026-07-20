@@ -104,8 +104,13 @@ class WechatChannelsAddon:
             self.inject_js = ""
 
     def request(self, flow: http.HTTPFlow):
-        """处理本地 API 请求,返回 JSON 响应。"""
+        """处理请求:记录微信域名流量,处理本地 API 上报。"""
         global _COLLECTED_PROFILE, _TIP_MESSAGES
+
+        host = flow.request.pretty_host
+        # 打印所有经过的微信相关域名请求(便于调试)
+        if "qq.com" in host or "weixin" in host:
+            logger.info("[拦截请求] %s %s", flow.request.method, flow.request.url)
 
         path = flow.request.path
         if path == "/__wx_channels_api/profile":
@@ -139,32 +144,45 @@ class WechatChannelsAddon:
             )
 
     def response(self, flow: http.HTTPFlow):
-        """拦截 channels.weixin.qq.com 的 HTML 响应,注入 JS。"""
+        """拦截微信视频号 HTML 响应,注入下载按钮 JS。"""
         host = flow.request.pretty_host
+
+        # 打印所有微信相关域名的响应(便于调试)
+        if "qq.com" in host or "weixin" in host:
+            content_type = flow.response.headers.get("content-type", "")
+            logger.info(
+                "[拦截响应] %s | status=%d | content-type=%s",
+                host, flow.response.status_code, content_type,
+            )
+
         if "channels.weixin.qq.com" not in host:
             return
 
         content_type = flow.response.headers.get("content-type", "")
         if "text/html" not in content_type:
+            logger.info("[跳过注入] %s 不是 HTML (content-type=%s)", host, content_type)
             return
 
         if not self.inject_js:
+            logger.warning("[跳过注入] inject.js 未加载,无法注入按钮")
             return
 
         try:
             html = flow.response.get_text()
             if html is None:
+                logger.warning("[跳过注入] %s 响应体为空", host)
                 return
             # 在 </head> 前注入脚本,若没有 </head> 则追加到末尾
             inject_block = "<script>\\n" + self.inject_js + "\\n</script>\\n"
             if "</head>" in html:
                 html = html.replace("</head>", inject_block + "</head>", 1)
+                logger.info("[注入成功] 在 </head> 前注入 JS 到 %s (HTML 长度 %d 字节)", host, len(html))
             else:
                 html = html + inject_block
+                logger.info("[注入成功] 追加 JS 到 %s 末尾 (HTML 长度 %d 字节)", host, len(html))
             flow.response.set_text(html)
-            logger.info("已向 %s 注入 JS 脚本", host)
         except Exception as e:
-            logger.error("注入 JS 失败: %s", e)
+            logger.error("[注入失败] %s: %s", host, e)
 
 
 addons = [WechatChannelsAddon()]
@@ -304,11 +322,13 @@ class WechatChannelsMitmProxy:
             f.write(addon_content)
 
         # mitmdump 命令行参数:通过 wrapper 脚本启动,而非直接 -m mitmproxy.tools.main
+        # -v: 增加日志详细程度,便于在 cmd 中查看拦截/注入流程
         cmd = [
             sys.executable, str(self._wrapper_file),
             "--listen-port", str(self.port),
             "--set", "confdir=" + str(self.cert_dir),
             "-s", str(self._addon_file),
+            "-v",
         ]
 
         # 若存在 CA 证书,指定给 mitmproxy 使用
@@ -328,10 +348,10 @@ class WechatChannelsMitmProxy:
         ])
 
         # 配置上游代理(可选):将所有流量转发到另一个代理(如 VPN)
-        # 格式: http://host:port 或 https://host:port
+        # mitmproxy 使用 --mode upstream:http://host:port 指定上游代理
         if self.upstream_proxy:
             cmd.extend([
-                "--set", "upstream_proxy=" + self.upstream_proxy,
+                "--mode", "upstream:" + self.upstream_proxy,
             ])
             logger.info("上游代理已配置: %s", self.upstream_proxy)
 
@@ -433,6 +453,7 @@ class WechatChannelsMitmProxy:
         """读取 mitmdump 子进程输出并记录日志。
 
         持续读取直到子进程结束或收到停止信号,防止 stdout 管道写满阻塞。
+        使用 info 级别而非 debug,确保用户能在 cmd 中看到完整流程。
         """
         if self._process is None or self._process.stdout is None:
             return
@@ -441,7 +462,7 @@ class WechatChannelsMitmProxy:
                 break
             line = line.rstrip()
             if line:
-                logger.debug("[mitmdump] %s", line)
+                logger.info("[mitmdump] %s", line)
 
     def stop(self) -> None:
         """停止 mitmdump 子进程并清理临时文件。"""
