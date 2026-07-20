@@ -100,7 +100,7 @@ if not exist "%USERPROFILE%\Desktop\UVD WebUI.lnk" (
 )
 echo.
 
-REM ---- Step 4: Backup current system proxy ----
+REM ---- Step 4: Backup current system proxy and set upstream proxy env ----
 echo [4/5] Backing up system proxy settings...
 set "PROXY_REG=HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
 set "PROXY_ENABLED="
@@ -111,6 +111,13 @@ for /f "tokens=2*" %%a in ('reg query "%PROXY_REG%" /v ProxyServer 2^>nul ^| fin
 
 echo   Current proxy enabled: !PROXY_ENABLED!
 echo   Current proxy server: !PROXY_SERVER!
+
+REM 设置上游代理环境变量(供 mitmproxy 使用)
+REM 格式: http://host:port
+if defined PROXY_SERVER (
+    set "UVD_UPSTREAM_PROXY=http://!PROXY_SERVER!"
+    echo   Upstream proxy env: !UVD_UPSTREAM_PROXY!
+)
 echo.
 
 REM ---- Step 5: Start the server ----
