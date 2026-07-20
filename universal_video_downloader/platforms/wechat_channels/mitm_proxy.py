@@ -146,21 +146,30 @@ class WechatChannelsAddon:
     def response(self, flow: http.HTTPFlow):
         """拦截微信视频号 HTML 响应,注入下载按钮 JS。"""
         host = flow.request.pretty_host
+        content_type = flow.response.headers.get("content-type", "")
 
         # 打印所有微信相关域名的响应(便于调试)
         if "qq.com" in host or "weixin" in host:
-            content_type = flow.response.headers.get("content-type", "")
             logger.info(
-                "[拦截响应] %s | status=%d | content-type=%s",
-                host, flow.response.status_code, content_type,
+                "[拦截响应] %s | status=%d | content-type=%s | url=%s",
+                host, flow.response.status_code, content_type, flow.request.url[:200],
             )
 
-        if "channels.weixin.qq.com" not in host:
+        # 只对 HTML 响应注入 JS,非 HTML(如视频流、API JSON)直接跳过
+        if "text/html" not in content_type:
             return
 
-        content_type = flow.response.headers.get("content-type", "")
-        if "text/html" not in content_type:
-            logger.info("[跳过注入] %s 不是 HTML (content-type=%s)", host, content_type)
+        # 匹配微信视频号相关域名:
+        # - channels.weixin.qq.com: 视频号 web 页面
+        # - finder.video.qq.com: 视频号详情页(部分情况返回 HTML)
+        # - weixin.qq.com: 微信通用域名
+        inject_hosts = (
+            "channels.weixin.qq.com",
+            "finder.video.qq.com",
+            ".weixin.qq.com",
+        )
+        if not any(h in host for h in inject_hosts):
+            logger.info("[跳过注入] %s 不在注入域名列表", host)
             return
 
         if not self.inject_js:
