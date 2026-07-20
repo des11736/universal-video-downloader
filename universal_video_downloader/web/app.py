@@ -437,7 +437,11 @@ async def ws_progress(ws: WebSocket) -> None:
 # ---------------------------------------------------------------------------
 @app.on_event("startup")
 async def _on_startup() -> None:
-    """启动时触发调度器初始化,避免首个请求承担加载延迟。"""
+    """启动时触发调度器初始化,避免首个请求承担加载延迟。
+
+    顺带启动微信视频号页面监听器(本地 MITM 代理,端口 8888)。
+    系统代理切换由启动脚本(start_uvd.bat/start_uvd.sh)负责。
+    """
     _get_dispatcher()
     _start_wechat_page_listener()
 

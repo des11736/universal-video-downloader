@@ -100,17 +100,37 @@ if not exist "%USERPROFILE%\Desktop\UVD WebUI.lnk" (
 )
 echo.
 
-REM ---- Step 4: Start the server ----
-echo [4/4] Starting UVD WebUI...
+REM ---- Step 4: Backup current system proxy ----
+echo [4/5] Backing up system proxy settings...
+set "PROXY_REG=HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+set "PROXY_ENABLED="
+set "PROXY_SERVER="
+
+for /f "tokens=3" %%a in ('reg query "%PROXY_REG%" /v ProxyEnable 2^>nul ^| findstr "REG_DWORD"') do set "PROXY_ENABLED=%%a"
+for /f "tokens=2*" %%a in ('reg query "%PROXY_REG%" /v ProxyServer 2^>nul ^| findstr "REG_SZ"') do set "PROXY_SERVER=%%b"
+
+echo   Current proxy enabled: !PROXY_ENABLED!
+echo   Current proxy server: !PROXY_SERVER!
+echo.
+
+REM ---- Step 5: Start the server ----
+echo [5/5] Starting UVD WebUI...
 echo.
 echo ========================================
 echo   UVD WebUI is running!
 echo   URL: http://127.0.0.1:8000
 echo   WeChat page listener: 127.0.0.1:8888
-echo   Configure the Windows proxy, then open a video page and click its Download button.
-echo   Press Ctrl+C to stop
+echo   System proxy switched to 127.0.0.1:8888
+echo   Press Ctrl+C to stop (proxy will be restored)
 echo ========================================
 echo.
+
+REM Switch system proxy to MITM proxy
+reg add "%PROXY_REG%" /v ProxyServer /t REG_SZ /d "127.0.0.1:8888" /f >nul
+reg add "%PROXY_REG%" /v ProxyEnable /t REG_DWORD /d 1 /f >nul
+
+REM Notify system of proxy change
+powershell -ExecutionPolicy Bypass -Command "[System.Net.WebRequest]::DefaultWebProxy = New-Object System.Net.WebProxy('127.0.0.1:8888'); [System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials" >nul 2>&1
 
 REM Open default browser after 3 seconds (non-blocking)
 start "" cmd /c "timeout /t 3 /nobreak >nul && start http://127.0.0.1:8000"
@@ -118,6 +138,22 @@ start "" cmd /c "timeout /t 3 /nobreak >nul && start http://127.0.0.1:8000"
 REM Start uvicorn server
 python -m universal_video_downloader.cli.main serve --host 127.0.0.1 --port 8000
 
+REM ---- Cleanup: Restore original proxy ----
 echo.
-echo UVD WebUI has stopped.
+echo Restoring system proxy...
+
+if defined PROXY_SERVER (
+    reg add "%PROXY_REG%" /v ProxyServer /t REG_SZ /d "%PROXY_SERVER%" /f >nul
+)
+if defined PROXY_ENABLED (
+    reg add "%PROXY_REG%" /v ProxyEnable /t REG_DWORD /d "%PROXY_ENABLED%" /f >nul
+)
+
+REM Notify system of proxy restore
+powershell -ExecutionPolicy Bypass -Command "$p = New-Object System.Net.WebProxy(''); [System.Net.WebRequest]::DefaultWebProxy = $p" >nul 2>&1
+
+echo   Proxy restored.
+echo   Original enabled: !PROXY_ENABLED!
+echo   Original server: !PROXY_SERVER!
+echo.
 pause

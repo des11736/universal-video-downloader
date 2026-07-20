@@ -254,11 +254,13 @@ class WechatChannelsMitmProxy:
         cert_dir: Path,
         js_assets_dir: Path,
         callback: Optional[ProgressCallback] = None,
+        upstream_proxy: Optional[str] = None,
     ) -> None:
         self.port = port
         self.cert_dir = Path(cert_dir)
         self.js_assets_dir = Path(js_assets_dir)
         self.callback = callback
+        self.upstream_proxy = upstream_proxy
 
         self._process: Optional[subprocess.Popen] = None
         self._addon_file: Optional[Path] = None
@@ -314,6 +316,14 @@ class WechatChannelsMitmProxy:
             cmd.extend([
                 "--set", "ssl_insecure=true",
             ])
+
+        # 配置上游代理(可选):将所有流量转发到另一个代理(如 VPN)
+        # 格式: http://host:port 或 https://host:port
+        if self.upstream_proxy:
+            cmd.extend([
+                "--set", "upstream_proxy=" + self.upstream_proxy,
+            ])
+            logger.info("上游代理已配置: %s", self.upstream_proxy)
 
         logger.info("启动 mitmdump: %s", " ".join(cmd))
 
