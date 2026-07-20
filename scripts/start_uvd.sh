@@ -17,6 +17,47 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 export PYTHONPATH="$PROJECT_ROOT"
 
+# 代理备份文件路径(用于异常退出后恢复)
+PROXY_BACKUP_FILE="/tmp/uvd_proxy_backup.txt"
+
+# ---- Step 0: Recover from previous abnormal exit ----
+# 如果上次异常退出,备份文件还存在,先恢复原代理
+if [ -f "$PROXY_BACKUP_FILE" ]; then
+    echo "[0/5] Recovering proxy from previous session..."
+    RECOVER_MODE=$(grep "^mode=" "$PROXY_BACKUP_FILE" | cut -d= -f2)
+    RECOVER_HOST=$(grep "^host=" "$PROXY_BACKUP_FILE" | cut -d= -f2)
+    RECOVER_PORT=$(grep "^port=" "$PROXY_BACKUP_FILE" | cut -d= -f2)
+
+    case "$(uname -s)" in
+        Darwin*)
+            for svc in $(networksetup -listallnetworkservices | tail -n +2); do
+                if [ "$RECOVER_MODE" = "manual" ] && [ -n "$RECOVER_HOST" ] && [ -n "$RECOVER_PORT" ]; then
+                    networksetup -setwebproxy "$svc" "$RECOVER_HOST" "$RECOVER_PORT" >/dev/null 2>&1
+                    networksetup -setsecurewebproxy "$svc" "$RECOVER_HOST" "$RECOVER_PORT" >/dev/null 2>&1
+                    networksetup -setwebproxystate "$svc" on >/dev/null 2>&1
+                    networksetup -setsecurewebproxystate "$svc" on >/dev/null 2>&1
+                else
+                    networksetup -setwebproxystate "$svc" off >/dev/null 2>&1
+                    networksetup -setsecurewebproxystate "$svc" off >/dev/null 2>&1
+                fi
+            done
+            ;;
+        Linux*)
+            gsettings set org.gnome.system.proxy mode "$RECOVER_MODE" >/dev/null 2>&1
+            if [ "$RECOVER_MODE" = "manual" ] && [ -n "$RECOVER_HOST" ] && [ -n "$RECOVER_PORT" ]; then
+                gsettings set org.gnome.system.proxy.http host "$RECOVER_HOST" >/dev/null 2>&1
+                gsettings set org.gnome.system.proxy.http port "$RECOVER_PORT" >/dev/null 2>&1
+                gsettings set org.gnome.system.proxy.https host "$RECOVER_HOST" >/dev/null 2>&1
+                gsettings set org.gnome.system.proxy.https port "$RECOVER_PORT" >/dev/null 2>&1
+            fi
+            ;;
+    esac
+
+    rm -f "$PROXY_BACKUP_FILE"
+    echo "  Proxy restored from backup."
+    echo ""
+fi
+
 echo "========================================"
 echo "  UVD WebUI Launcher"
 echo "========================================"
@@ -141,6 +182,19 @@ esac
 echo "  Current proxy mode: $PROXY_MODE"
 echo "  Current proxy host: $PROXY_HOST"
 echo "  Current proxy port: $PROXY_PORT"
+
+# 写入备份文件(用于异常退出后恢复)
+cat > "$PROXY_BACKUP_FILE" <<EOF
+mode=$PROXY_MODE
+host=$PROXY_HOST
+port=$PROXY_PORT
+EOF
+
+# 设置上游代理环境变量(供 mitmproxy 使用)
+if [ -n "$PROXY_HOST" ] && [ -n "$PROXY_PORT" ]; then
+    export UVD_UPSTREAM_PROXY="http://$PROXY_HOST:$PROXY_PORT"
+    echo "  Upstream proxy env: $UVD_UPSTREAM_PROXY"
+fi
 echo ""
 
 # ---- Step 5: Start the server ----
@@ -216,6 +270,9 @@ case "$(uname -s)" in
         fi
         ;;
 esac
+
+# 删除备份文件(正常退出,无需恢复)
+rm -f "$PROXY_BACKUP_FILE"
 
 echo "  Proxy restored."
 echo "  Original mode: $PROXY_MODE"

@@ -12,6 +12,29 @@ set PYTHONPATH=%~dp0..
 set PROJECT_ROOT=%~dp0..
 cd /d "%PROJECT_ROOT%"
 
+REM 代理备份文件路径(用于异常退出后恢复)
+set "PROXY_BACKUP_FILE=%TEMP%\uvd_proxy_backup.txt"
+
+REM ---- Step 0: Recover from previous abnormal exit ----
+REM 如果上次异常退出,备份文件还存在,先恢复原代理
+if exist "%PROXY_BACKUP_FILE%" (
+    echo [0/5] Recovering proxy from previous session...
+    for /f "usebackq tokens=1,2 delims==" %%a in ("%PROXY_BACKUP_FILE%") do (
+        if "%%a"=="enabled" set "RECOVER_ENABLED=%%b"
+        if "%%a"=="server" set "RECOVER_SERVER=%%b"
+    )
+    set "PROXY_REG=HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+    if defined RECOVER_SERVER (
+        reg add "%PROXY_REG%" /v ProxyServer /t REG_SZ /d "!RECOVER_SERVER!" /f >nul
+    )
+    if defined RECOVER_ENABLED (
+        reg add "%PROXY_REG%" /v ProxyEnable /t REG_DWORD /d "!RECOVER_ENABLED!" /f >nul
+    )
+    del "%PROXY_BACKUP_FILE%" >nul 2>&1
+    echo   Proxy restored from backup.
+    echo.
+)
+
 REM ---- Step 1: Verify Python is installed ----
 echo ========================================
 echo   UVD WebUI Launcher
@@ -112,6 +135,14 @@ for /f "tokens=2*" %%a in ('reg query "%PROXY_REG%" /v ProxyServer 2^>nul ^| fin
 echo   Current proxy enabled: !PROXY_ENABLED!
 echo   Current proxy server: !PROXY_SERVER!
 
+REM 写入备份文件(用于异常退出后恢复)
+REM 格式: enabled=0x0/0x1
+REM       server=host:port
+(
+    echo enabled=!PROXY_ENABLED!
+    echo server=!PROXY_SERVER!
+) > "%PROXY_BACKUP_FILE%"
+
 REM 设置上游代理环境变量(供 mitmproxy 使用)
 REM 格式: http://host:port
 if defined PROXY_SERVER (
@@ -155,6 +186,9 @@ if defined PROXY_SERVER (
 if defined PROXY_ENABLED (
     reg add "%PROXY_REG%" /v ProxyEnable /t REG_DWORD /d "%PROXY_ENABLED%" /f >nul
 )
+
+REM 删除备份文件(正常退出,无需恢复)
+if exist "%PROXY_BACKUP_FILE%" del "%PROXY_BACKUP_FILE%" >nul 2>&1
 
 REM Notify system of proxy restore
 powershell -ExecutionPolicy Bypass -Command "$p = New-Object System.Net.WebProxy(''); [System.Net.WebRequest]::DefaultWebProxy = $p" >nul 2>&1
