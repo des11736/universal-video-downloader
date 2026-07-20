@@ -13,6 +13,12 @@
 
 依赖 ``mitmproxy``(已在 pyproject.toml 声明)。若环境中缺失,会在导入时
 给出安装提示。
+
+兼容性说明:
+    ``passlib 1.7.4`` 与 ``bcrypt 5.x`` 不兼容(passlib 访问已移除的
+    ``bcrypt.__about__.__version__``,且 bcrypt 5.x 严格要求 password
+    <=72 bytes)。本模块通过 wrapper 脚本在导入 mitmproxy 之前
+    monkey-patch bcrypt,绕过此问题。
 """
 
 from __future__ import annotations
@@ -20,6 +26,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -41,6 +48,9 @@ except ImportError:
 
 # addon 脚本模板,作为独立 .py 文件由 mitmdump 加载。
 # 使用字符串模板而非直接 import,是因为 mitmdump 需要一个可执行脚本文件路径。
+# 注意:``from __future__ import annotations`` 必须位于文件开头(除 docstring 外),
+# 所以 _INJECT_JS_PATH 的注入通过占位符 __INJECT_JS_PATH_REPR__ 替换实现,
+# 而不是在文件开头插入代码。
 _ADDON_TEMPLATE = '''\
 """mitmproxy addon:微信视频号流量拦截与注入。
 
@@ -52,6 +62,9 @@ import json
 import logging
 import threading
 from mitmproxy import http
+
+# inject.js 路径,由 mitm_proxy.py 在生成时替换 __INJECT_JS_PATH_REPR__ 占位符
+_INJECT_JS_PATH = __INJECT_JS_PATH_REPR__
 
 logger = logging.getLogger("wechat_channels_addon")
 
@@ -157,8 +170,68 @@ class WechatChannelsAddon:
 addons = [WechatChannelsAddon()]
 '''
 
-# 用于在 addon 脚本中传递 inject.js 路径的全局变量名
-_INJECT_JS_GLOBAL = '_INJECT_JS_PATH = {inject_js_path!r}\n'
+# 用于在 addon 脚本中传递 inject.js 路径的占位符替换
+# 使用 repr() 确保路径中的反斜杠/特殊字符正确转义
+def _render_addon_content(inject_js_path: Path) -> str:
+    """渲染 addon 脚本内容,注入 inject.js 路径。
+
+    使用占位符替换而非字符串拼接,确保 ``from __future__ import annotations``
+    仍位于文件开头(否则会触发 SyntaxError)。
+    """
+    return _ADDON_TEMPLATE.replace(
+        "__INJECT_JS_PATH_REPR__", repr(str(inject_js_path))
+    )
+
+
+# mitmdump wrapper 脚本模板:在导入 mitmproxy 之前 monkey-patch bcrypt,
+# 绕过 passlib 1.7.4 与 bcrypt 5.x 的兼容性问题。
+# 问题1: bcrypt 5.x 移除了 __about__ 模块,passlib 访问 __about__.__version__ 报 AttributeError
+# 问题2: bcrypt 5.x 严格要求 password <=72 bytes,passlib 检测 wrap bug 时用长 secret 报 ValueError
+# 上述两个错误会导致 mitmproxy 在 import 阶段崩溃,根本无法启动。
+# 此 wrapper 在 mitmproxy 导入前 patch bcrypt,确保兼容。
+_WRAPPER_TEMPLATE = '''\
+"""mitmdump 启动 wrapper:预先 patch bcrypt 兼容性问题。"""
+import sys
+
+
+def _patch_bcrypt():
+    """Monkey-patch bcrypt 以兼容 passlib 1.7.4。
+
+    1. 注入 __about__ 模块(passlib 访问 __about__.__version__)
+    2. 包装 hashpw 自动截断 >72 bytes 的 password(bcrypt 5.x 严格要求)
+    """
+    try:
+        import bcrypt
+    except ImportError:
+        return  # bcrypt 未装,passlib 会用其他后端或不启用
+
+    import types
+    if not hasattr(bcrypt, "__about__"):
+        about = types.ModuleType("bcrypt.__about__")
+        about.__version__ = getattr(bcrypt, "__version__", "unknown")
+        bcrypt.__about__ = about
+        sys.modules["bcrypt.__about__"] = about
+
+    _orig_hashpw = bcrypt.hashpw
+
+    def _safe_hashpw(secret, salt, *args, **kwargs):
+        if isinstance(secret, str):
+            secret = secret.encode("utf-8")
+        if len(secret) > 72:
+            secret = secret[:72]
+        return _orig_hashpw(secret, salt, *args, **kwargs)
+
+    bcrypt.hashpw = _safe_hashpw
+
+
+_patch_bcrypt()
+
+# 玾在可以安全导入 mitmproxy 并启动 mitmdump
+from mitmproxy.tools.main import mitmdump
+
+if __name__ == "__main__":
+    mitmdump(sys.argv[1:])
+'''
 
 
 class WechatChannelsMitmProxy:
@@ -189,6 +262,7 @@ class WechatChannelsMitmProxy:
 
         self._process: Optional[subprocess.Popen] = None
         self._addon_file: Optional[Path] = None
+        self._wrapper_file: Optional[Path] = None
         self._profile_file: Optional[Path] = None
         self._tip_file: Optional[Path] = None
         self._stop_event = threading.Event()
@@ -196,8 +270,10 @@ class WechatChannelsMitmProxy:
     def start(self) -> None:
         """启动 mitmdump 子进程。
 
-        会生成临时 addon 脚本文件,然后以命令行方式启动 mitmdump。
-        CA 证书路径通过 ``--set`` 传给 mitmproxy,用于 HTTPS 解密。
+        会生成临时 wrapper 与 addon 脚本文件,然后以命令行方式启动 mitmdump。
+        wrapper 脚本在导入 mitmproxy 之前 monkey-patch bcrypt,绕过 passlib
+        与 bcrypt 5.x 的兼容性问题。启动后会轮询端口监听状态,确保子进程
+        真正可用(避免子进程秒崩但 is_running 误报的情况)。
         """
         if not _HAS_MITMPROXY:
             raise RuntimeError(
@@ -211,19 +287,23 @@ class WechatChannelsMitmProxy:
         ca_cert = self.cert_dir / "ca.crt"
         ca_key = self.cert_dir / "ca.key"
 
-        # 生成临时 addon 脚本
-        addon_content = _INJECT_JS_GLOBAL.format(inject_js_path=str(inject_js_path))
-        addon_content += _ADDON_TEMPLATE
+        # 生成临时 wrapper 脚本(patch bcrypt 兼容性)
+        fd, wrapper_path = tempfile.mkstemp(suffix=".py", prefix="wx_mitm_wrapper_")
+        self._wrapper_file = Path(wrapper_path)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(_WRAPPER_TEMPLATE)
 
-        # 使用 NamedTemporaryFile 保证退出时清理
+        # 生成临时 addon 脚本(通过占位符替换注入 inject.js 路径)
+        addon_content = _render_addon_content(inject_js_path)
+
         fd, addon_path = tempfile.mkstemp(suffix=".py", prefix="wx_channels_addon_")
         self._addon_file = Path(addon_path)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(addon_content)
 
-        # mitmdump 命令行参数
+        # mitmdump 命令行参数:通过 wrapper 脚本启动,而非直接 -m mitmproxy.tools.main
         cmd = [
-            sys.executable, "-m", "mitmproxy.tools.main", "mitmdump",
+            sys.executable, str(self._wrapper_file),
             "--listen-port", str(self.port),
             "--set", "confdir=" + str(self.cert_dir),
             "-s", str(self._addon_file),
@@ -240,7 +320,7 @@ class WechatChannelsMitmProxy:
         if self.callback:
             self.callback.on_progress("", 0.0)
 
-        # 以非阻塞方式启动子进程,stdout/stderr 输出到当前终端
+        # 以非阻塞方式启动子进程,stdout/stderr 输出到管道供读取
         self._process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -253,6 +333,81 @@ class WechatChannelsMitmProxy:
         # 启动后台线程读取子进程输出,避免管道阻塞
         reader = threading.Thread(target=self._read_output, daemon=True)
         reader.start()
+
+        # 等待端口真正监听(最多 8 秒),避免子进程秒崩但误报"已启动"
+        if not self._wait_for_port(timeout=8.0):
+            # 端口未监听,检查子进程是否已退出
+            if self._process.poll() is not None:
+                # 子进程已退出,收集输出用于错误诊断
+                output = self._collect_recent_output()
+                self._cleanup_temp_files()
+                raise RuntimeError(
+                    "mitmdump 子进程启动后立即退出(exit code="
+                    f"{self._process.returncode})。\n"
+                    "可能原因:passlib/bcrypt 不兼容、证书问题或端口被占用。\n"
+                    f"子进程输出:\n{output}"
+                )
+            # 子进程还在运行但端口没监听,继续执行(可能是慢启动)
+            logger.warning("mitmdump 启动 8 秒后端口 %d 仍未监听", self.port)
+
+    def _wait_for_port(self, timeout: float = 8.0, interval: float = 0.3) -> bool:
+        """轮询检测端口是否真正监听。
+
+        Args:
+            timeout: 总等待时间(秒)。
+            interval: 轮询间隔(秒)。
+
+        Returns:
+            True 如果端口在超时前开始监听;False 否。
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            # 子进程已退出,无需再等
+            if self._process is not None and self._process.poll() is not None:
+                return False
+            try:
+                with socket.create_connection(
+                    ("127.0.0.1", self.port), timeout=0.5
+                ):
+                    return True
+            except OSError:
+                time.sleep(interval)
+        return False
+
+    def _collect_recent_output(self, max_lines: int = 50) -> str:
+        """收集子进程最近的输出(用于错误诊断)。
+
+        读取 stdout 管道中已有的内容(非阻塞),返回最近的 max_lines 行。
+        """
+        if self._process is None or self._process.stdout is None:
+            return ""
+        lines = []
+        try:
+            import select as _select
+            while len(lines) < max_lines:
+                # Windows 不支持 select.select on pipe,用非阻塞读取替代
+                readable, _, _ = _select.select([self._process.stdout], [], [], 0.1)
+                if not readable:
+                    break
+                line = self._process.stdout.readline()
+                if not line:
+                    break
+                lines.append(line.rstrip())
+        except Exception:
+            # select 在 Windows 管道上不可靠,回退到直接读取已有缓冲
+            pass
+        return "\n".join(lines[-max_lines:])
+
+    def _cleanup_temp_files(self) -> None:
+        """清理所有临时文件(wrapper + addon)。"""
+        for f in (self._wrapper_file, self._addon_file):
+            if f and f.exists():
+                try:
+                    f.unlink()
+                except OSError:
+                    pass
+        self._wrapper_file = None
+        self._addon_file = None
 
     def _read_output(self) -> None:
         """读取 mitmdump 子进程输出并记录日志。
@@ -285,13 +440,8 @@ class WechatChannelsMitmProxy:
             finally:
                 self._process = None
 
-        # 清理临时 addon 文件
-        if self._addon_file and self._addon_file.exists():
-            try:
-                self._addon_file.unlink()
-            except OSError:
-                pass
-            self._addon_file = None
+        # 清理临时文件(wrapper + addon)
+        self._cleanup_temp_files()
 
     def get_profile(self, timeout: float = 300.0, poll_interval: float = 1.0) -> Optional[dict[str, Any]]:
         """轮询等待 JS 端上报的视频 profile。
