@@ -8,6 +8,7 @@ platforms 等子命令,封装适配器调度、配置管理与进度展示。对
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
@@ -422,6 +423,11 @@ def serve(
         os.environ["UVD_CONFIG_PATH"] = str(config_path)
     typer.echo(f"启动 Web UI: http://{host}:{port}")
     # 配置日志级别为 info,确保 mitmproxy 拦截/注入日志可见
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
     uvicorn.run(web_app, host=host, port=port, log_level="info")
 
 
