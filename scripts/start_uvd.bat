@@ -151,6 +151,38 @@ if defined PROXY_SERVER (
 )
 echo.
 
+REM ---- Step 4b: Install CA certificate to system trust store ----
+REM 浏览器不信任 MITM 自签名证书会导致 TLS 握手失败,需将 CA 安装到系统受信任根证书
+set "CA_CERT_PATH=%PROJECT_ROOT%\universal_video_downloader\certs\ca.crt"
+if exist "%CA_CERT_PATH%" (
+    REM 检查证书是否已安装(通过 certutil 查找)
+    certutil -store Root "UVD Local CA" 2>nul | findstr /C:"UVD Local CA" >nul
+    if errorlevel 1 (
+        echo [4b/5] Installing CA certificate to system trust store...
+        REM 需要管理员权限,若失败会提示用户
+        certutil -addstore -f Root "%CA_CERT_PATH%" >nul 2>&1
+        if errorlevel 1 (
+            echo   [WARNING] Failed to install CA automatically. Trying user store...
+            REM 退而求其次:安装到当前用户证书存储(不需要管理员权限)
+            certutil -user -addstore -f Root "%CA_CERT_PATH%" >nul 2>&1
+            if errorlevel 1 (
+                echo   [ERROR] Cannot install CA cert. Please manually install:
+                echo          %CA_CERT_PATH%
+                echo          Restart your browser after installation.
+            ) else (
+                echo   CA certificate installed to user trust store.
+            )
+        ) else (
+            echo   CA certificate installed to system trust store.
+        )
+    ) else (
+        echo [4b/5] CA certificate already installed.
+    )
+) else (
+    echo [4b/5] CA certificate not found at %CA_CERT_PATH%. Will be generated on first start.
+)
+echo.
+
 REM ---- Step 5: Start the server ----
 echo [5/5] Starting UVD WebUI...
 echo.

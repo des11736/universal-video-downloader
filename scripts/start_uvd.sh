@@ -197,6 +197,44 @@ if [ -n "$PROXY_HOST" ] && [ -n "$PROXY_PORT" ]; then
 fi
 echo ""
 
+# ---- Step 4b: Install CA certificate to system trust store ----
+CA_CERT_PATH="$PROJECT_ROOT/universal_video_downloader/certs/ca.crt"
+if [ -f "$CA_CERT_PATH" ]; then
+    echo "[4b/5] Installing CA certificate to system trust store..."
+    case "$(uname -s)" in
+        Darwin*)
+            # macOS: 安装到系统钥匙串并设置信任
+            if ! security find-certificate -c "UVD Local CA" /Library/Keychains/System.keychain >/dev/null 2>&1; then
+                sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "$CA_CERT_PATH" 2>&1
+                if [ $? -eq 0 ]; then
+                    echo "  CA certificate installed to macOS System keychain."
+                else
+                    echo "  [WARNING] Failed to install CA. Please manually import: $CA_CERT_PATH"
+                fi
+            else
+                echo "  CA certificate already installed."
+            fi
+            ;;
+        Linux*)
+            # Linux: 安装到系统 CA 证书目录并更新证书库
+            if [ -d /usr/local/share/ca-certificates ]; then
+                if [ ! -f /usr/local/share/ca-certificates/uvd-local-ca.crt ]; then
+                    sudo cp "$CA_CERT_PATH" /usr/local/share/ca-certificates/uvd-local-ca.crt
+                    sudo update-ca-certificates 2>&1
+                    echo "  CA certificate installed to Linux system trust store."
+                else
+                    echo "  CA certificate already installed."
+                fi
+            else
+                echo "  [WARNING] CA certificates directory not found. Please manually import: $CA_CERT_PATH"
+            fi
+            ;;
+    esac
+else
+    echo "[4b/5] CA certificate not found at $CA_CERT_PATH. Will be generated on first start."
+fi
+echo ""
+
 # ---- Step 5: Start the server ----
 echo "[5/5] Starting UVD WebUI..."
 echo ""
