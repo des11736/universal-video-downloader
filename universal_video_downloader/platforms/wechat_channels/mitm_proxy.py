@@ -321,9 +321,10 @@ class WechatChannelsMitmProxy:
         # 这样用户无需安装 MITM 根证书也能正常上网,只有微信视频号
         # 页面需要信任证书(可手动在浏览器中点击"继续访问"即可)。
         # allow-hosts:只对匹配的域名做 HTTPS 解密,其他直接透传
+        # 覆盖微信视频号所有相关域名:channels/finder/video等子域名
         cmd.extend([
             "--allow-hosts",
-            r"\.weixin\.qq\.com",
+            r"\.(weixin|finder|video)\.qq\.com",
         ])
 
         # 配置上游代理(可选):将所有流量转发到另一个代理(如 VPN)
