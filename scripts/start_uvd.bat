@@ -153,12 +153,15 @@ echo.
 
 REM ---- Step 4b: Install CA certificate to system trust store ----
 REM 浏览器不信任 MITM 自签名证书会导致 TLS 握手失败,需将 CA 安装到系统受信任根证书
-set "CA_CERT_PATH=%PROJECT_ROOT%\universal_video_downloader\certs\ca.crt"
+REM mitmproxy 默认使用 mitmproxy-ca-cert.cer,而非我们生成的 ca.crt
+set "CA_CERT_PATH=%PROJECT_ROOT%\universal_video_downloader\certs\mitmproxy-ca-cert.cer"
+if not exist "%CA_CERT_PATH%" set "CA_CERT_PATH=%PROJECT_ROOT%\universal_video_downloader\certs\ca.crt"
 if exist "%CA_CERT_PATH%" (
-    REM 检查证书是否已安装(通过 certutil 查找)
-    certutil -store Root "UVD Local CA" 2>nul | findstr /C:"UVD Local CA" >nul
+    REM 检查证书是否已安装(通过 certutil 查找 mitmproxy)
+    certutil -store Root "mitmproxy" 2>nul | findstr /C:"mitmproxy" >nul
     if errorlevel 1 (
         echo [4b/5] Installing CA certificate to system trust store...
+        echo   CA cert: %CA_CERT_PATH%
         REM 需要管理员权限,若失败会提示用户
         certutil -addstore -f Root "%CA_CERT_PATH%" >nul 2>&1
         if errorlevel 1 (

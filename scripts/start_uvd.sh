@@ -198,13 +198,18 @@ fi
 echo ""
 
 # ---- Step 4b: Install CA certificate to system trust store ----
-CA_CERT_PATH="$PROJECT_ROOT/universal_video_downloader/certs/ca.crt"
+# mitmproxy 默认使用 mitmproxy-ca-cert.pem,而非我们生成的 ca.crt
+CA_CERT_PATH="$PROJECT_ROOT/universal_video_downloader/certs/mitmproxy-ca-cert.pem"
+if [ ! -f "$CA_CERT_PATH" ]; then
+    CA_CERT_PATH="$PROJECT_ROOT/universal_video_downloader/certs/ca.crt"
+fi
 if [ -f "$CA_CERT_PATH" ]; then
     echo "[4b/5] Installing CA certificate to system trust store..."
+    echo "  CA cert: $CA_CERT_PATH"
     case "$(uname -s)" in
         Darwin*)
             # macOS: 安装到系统钥匙串并设置信任
-            if ! security find-certificate -c "UVD Local CA" /Library/Keychains/System.keychain >/dev/null 2>&1; then
+            if ! security find-certificate -c "mitmproxy" /Library/Keychains/System.keychain >/dev/null 2>&1; then
                 sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "$CA_CERT_PATH" 2>&1
                 if [ $? -eq 0 ]; then
                     echo "  CA certificate installed to macOS System keychain."
@@ -218,8 +223,8 @@ if [ -f "$CA_CERT_PATH" ]; then
         Linux*)
             # Linux: 安装到系统 CA 证书目录并更新证书库
             if [ -d /usr/local/share/ca-certificates ]; then
-                if [ ! -f /usr/local/share/ca-certificates/uvd-local-ca.crt ]; then
-                    sudo cp "$CA_CERT_PATH" /usr/local/share/ca-certificates/uvd-local-ca.crt
+                if [ ! -f /usr/local/share/ca-certificates/uvd-mitmproxy-ca.crt ]; then
+                    sudo cp "$CA_CERT_PATH" /usr/local/share/ca-certificates/uvd-mitmproxy-ca.crt
                     sudo update-ca-certificates 2>&1
                     echo "  CA certificate installed to Linux system trust store."
                 else
