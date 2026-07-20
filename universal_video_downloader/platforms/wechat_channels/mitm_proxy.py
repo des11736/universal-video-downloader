@@ -317,6 +317,15 @@ class WechatChannelsMitmProxy:
                 "--set", "ssl_insecure=true",
             ])
 
+        # 关键:只解密微信视频号相关域名,其他流量直接透传不解密。
+        # 这样用户无需安装 MITM 根证书也能正常上网,只有微信视频号
+        # 页面需要信任证书(可手动在浏览器中点击"继续访问"即可)。
+        # allow-hosts:只对匹配的域名做 HTTPS 解密,其他直接透传
+        cmd.extend([
+            "--allow-hosts",
+            r"\.weixin\.qq\.com",
+        ])
+
         # 配置上游代理(可选):将所有流量转发到另一个代理(如 VPN)
         # 格式: http://host:port 或 https://host:port
         if self.upstream_proxy:
